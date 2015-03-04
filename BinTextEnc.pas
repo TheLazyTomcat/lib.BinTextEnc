@@ -1,3 +1,12 @@
+{===============================================================================
+
+  Binary to text encodings
+
+  ©2015 František Milt
+
+  Version 1.0
+
+===============================================================================}
 unit BinTextEnc;
 
 interface
@@ -214,6 +223,20 @@ Function Encode_Hexadecimal(Data: Pointer; Size: Integer; Reversed: Boolean = Fa
 Function AnsiEncode_Hexadecimal(Data: Pointer; Size: Integer; Reversed: Boolean = False): AnsiString;
 Function WideEncode_Hexadecimal(Data: Pointer; Size: Integer; Reversed: Boolean = False): UnicodeString;
 
+
+Function Encode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): String; overload;
+Function AnsiEncode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): AnsiString; overload;
+Function WideEncode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): UnicodeString; overload;
+
+Function Encode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of Char; PaddingChar: Char): String; overload;
+Function AnsiEncode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar): AnsiString; overload;
+Function WideEncode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): UnicodeString; overload;
+
+Function Encode_Base32Hex(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): String; overload;
+Function AnsiEncode_Base32Hex(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): AnsiString; overload;
+Function WideEncode_Base32Hex(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): UnicodeString; overload;
+
+
 {------------------------------------------------------------------------------}
 
 Function Decode_Base2(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
@@ -292,6 +315,31 @@ Function AnsiDecode_Hexadecimal(const Str: AnsiString; Ptr: Pointer; Size: Integ
 Function WideDecode_Hexadecimal(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
 
 
+Function Decode_Base32(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
+Function AnsiDecode_Base32(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
+Function WideDecode_Base32(const Str: UnicodeString; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
+
+Function Decode_Base32(const Str: String; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
+Function AnsiDecode_Base32(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
+Function WideDecode_Base32(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
+
+Function Decode_Base32(const Str: String; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of Char; PaddingChar: Char): Pointer; overload;
+Function AnsiDecode_Base32(const Str: AnsiString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar; PaddingChar: AnsiChar): Pointer; overload;
+Function WideDecode_Base32(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): Pointer; overload;
+
+Function Decode_Base32(const Str: String; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of Char; PaddingChar: Char): Integer; overload;
+Function AnsiDecode_Base32(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar; PaddingChar: AnsiChar): Integer; overload;
+Function WideDecode_Base32(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): Integer; overload;
+
+Function Decode_Base32Hex(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
+Function AnsiDecode_Base32Hex(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
+Function WideDecode_Base32Hex(const Str: UnicodeString; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
+
+Function Decode_Base32Hex(const Str: String; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
+Function AnsiDecode_Base32Hex(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
+Function WideDecode_Base32Hex(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
+
+
 implementation
 
 uses
@@ -299,10 +347,13 @@ uses
 
 {$MESSAGE 'temporary'}
 const
-  headerlength = 4;
   EncodingHexadecimal = '$';
+  EncodingHeaderStart = '#';
+  EncodingHeaderEnd   = ':';
 
-  Coefficients_Base10: Array[1..3] of Word = (100,10,1);
+  HeaderLength = Length(EncodingHeaderStart + '00' + EncodingHeaderEnd);
+
+  Coefficients_Base10: Array[1..3] of Word     = (100,10,1);
   Coefficients_Base85: Array[1..5] of LongWord = (52200625,614125,7225,85,1);
 
 {==============================================================================}
@@ -1312,6 +1363,203 @@ Result := WideEncode_Base16(Data,Size,Reversed,WideEncodingTable_Hexadecimal);
 end;
 
 {==============================================================================}
+
+Function Encode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): String;
+begin
+{$IFDEF Unicode}
+Result := WideEncode_Base32(Data,Size,Reversed,Padding);
+{$ELSE}
+Result := AnsiEncode_Base32(Data,Size,Reversed,Padding);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiEncode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): AnsiString;
+begin
+Result := AnsiEncode_Base32(Data,Size,Reversed,Padding,AnsiEncodingTable_Base32,AnsiPaddingChar_Base32);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideEncode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): UnicodeString;
+begin
+Result := WideEncode_Base32(Data,Size,Reversed,Padding,WideEncodingTable_Base32,WidePaddingChar_Base32);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Encode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of Char; PaddingChar: Char): String;
+begin
+{$IFDEF Unicode}
+Result := WideEncode_Base32(Data,Size,Reversed,Padding,EncodingTable,PaddingChar);
+{$ELSE}
+Result := AnsiEncode_Base32(Data,Size,Reversed,Padding,EncodingTable,PaddingChar);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiEncode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar): AnsiString;
+var
+  Buffer:         Byte;
+  i:              Integer;
+  Remainder:      Byte;
+  RemainderBits:  Integer;
+  ResultPosition: Integer;
+begin
+ResolveDataPointer(Data,Reversed,Size);
+SetLength(Result,EncodedLength_Base32(Size,False,Padding));
+Remainder := 0;
+RemainderBits := 0;
+ResultPosition := 1;
+For i := 0 to Pred(Size) do
+  begin
+    Buffer := PByte(Data)^;
+    case RemainderBits of
+      0:  begin
+            Result[ResultPosition] := EncodingTable[(Buffer and $F8) shr 3];
+            Inc(ResultPosition,1);
+            Remainder := Buffer and $07;
+            RemainderBits := 3;
+          end;
+      1:  begin
+            Result[ResultPosition] := EncodingTable[(Remainder shl 4) or ((Buffer and $F0) shr 4)];
+            Inc(ResultPosition,1);
+            Remainder := Buffer and $0F;
+            RemainderBits := 4;
+          end;
+      2:  begin
+            Result[ResultPosition] := EncodingTable[(Remainder shl 3) or ((Buffer and $E0) shr 5)];
+            Result[ResultPosition + 1] := EncodingTable[Buffer and $1F];
+            Inc(ResultPosition,2);
+            Remainder := 0;
+            RemainderBits := 0;
+          end;
+      3:  begin
+            Result[ResultPosition] := EncodingTable[(Remainder shl 2) or ((Buffer and $C0) shr 6)];
+            Result[ResultPosition + 1] := EncodingTable[(Buffer and $3E) shr 1];
+            Inc(ResultPosition,2);
+            Remainder := Buffer and $01;
+            RemainderBits := 1;
+          end;
+      4:  begin
+            Result[ResultPosition] := EncodingTable[(Remainder shl 1) or ((Buffer and $80) shr 7)];
+            Result[ResultPosition + 1] := EncodingTable[(Buffer and $7C) shr 2];
+            Inc(ResultPosition,2);
+            Remainder := Buffer and $03;
+            RemainderBits := 2;
+          end;
+    else
+      raise EConvertError.CreateFmt('AnsiEncode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
+    end;
+    AdvanceDataPointer(Data,Reversed);
+  end;
+case RemainderBits of
+  1:  Result[ResultPosition] := EncodingTable[Remainder shl 4];
+  2:  Result[ResultPosition] := EncodingTable[Remainder shl 3];
+  3:  Result[ResultPosition] := EncodingTable[Remainder shl 2];
+  4:  Result[ResultPosition] := EncodingTable[Remainder shl 1];
+end;
+Inc(ResultPosition);
+If Padding then
+  For i := ResultPosition to Length(Result) do Result[i] := PaddingChar;
+end;
+{------------------------------------------------------------------------------}
+
+Function WideEncode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): UnicodeString;
+var
+  Buffer:         Byte;
+  i:              Integer;
+  Remainder:      Byte;
+  RemainderBits:  Integer;
+  ResultPosition: Integer;
+begin
+ResolveDataPointer(Data,Reversed,Size);
+SetLength(Result,EncodedLength_Base32(Size,False,Padding));
+Remainder := 0;
+RemainderBits := 0;
+ResultPosition := 1;
+For i := 0 to Pred(Size) do
+  begin
+    Buffer := PByte(Data)^;
+    case RemainderBits of
+      0:  begin
+            Result[ResultPosition] := EncodingTable[(Buffer and $F8) shr 3];
+            Inc(ResultPosition,1);
+            Remainder := Buffer and $07;
+            RemainderBits := 3;
+          end;
+      1:  begin
+            Result[ResultPosition] := EncodingTable[(Remainder shl 4) or ((Buffer and $F0) shr 4)];
+            Inc(ResultPosition,1);
+            Remainder := Buffer and $0F;
+            RemainderBits := 4;
+          end;
+      2:  begin
+            Result[ResultPosition] := EncodingTable[(Remainder shl 3) or ((Buffer and $E0) shr 5)];
+            Result[ResultPosition + 1] := EncodingTable[Buffer and $1F];
+            Inc(ResultPosition,2);
+            Remainder := 0;
+            RemainderBits := 0;
+          end;
+      3:  begin
+            Result[ResultPosition] := EncodingTable[(Remainder shl 2) or ((Buffer and $C0) shr 6)];
+            Result[ResultPosition + 1] := EncodingTable[(Buffer and $3E) shr 1];
+            Inc(ResultPosition,2);
+            Remainder := Buffer and $01;
+            RemainderBits := 1;
+          end;
+      4:  begin
+            Result[ResultPosition] := EncodingTable[(Remainder shl 1) or ((Buffer and $80) shr 7)];
+            Result[ResultPosition + 1] := EncodingTable[(Buffer and $7C) shr 2];
+            Inc(ResultPosition,2);
+            Remainder := Buffer and $03;
+            RemainderBits := 2;
+          end;
+    else
+      raise EConvertError.CreateFmt('WideEncode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
+    end;
+    AdvanceDataPointer(Data,Reversed);
+  end;
+case RemainderBits of
+  1:  Result[ResultPosition] := EncodingTable[Remainder shl 4];
+  2:  Result[ResultPosition] := EncodingTable[Remainder shl 3];
+  3:  Result[ResultPosition] := EncodingTable[Remainder shl 2];
+  4:  Result[ResultPosition] := EncodingTable[Remainder shl 1];
+end;
+Inc(ResultPosition);
+If Padding then
+  For i := ResultPosition to Length(Result) do Result[i] := PaddingChar;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Encode_Base32Hex(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): String;
+begin
+{$IFDEF Unicode}
+Result := WideEncode_Base32Hex(Data,Size,Reversed,Padding);
+{$ELSE}
+Result := AnsiEncode_Base32Hex(Data,Size,Reversed,Padding);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiEncode_Base32Hex(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): AnsiString;
+begin
+Result := AnsiEncode_Base32(Data,Size,Reversed,Padding,AnsiEncodingTable_Base32Hex,AnsiPaddingChar_Base32Hex);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideEncode_Base32Hex(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): UnicodeString;
+begin
+Result := WideEncode_Base32(Data,Size,Reversed,Padding,WideEncodingTable_Base32Hex,WidePaddingChar_Base32Hex);
+end;
+
+
+{==============================================================================}
 {------------------------------------------------------------------------------}
 {    Decoding functions                                                        }
 {------------------------------------------------------------------------------}
@@ -2014,6 +2262,286 @@ begin
 Result := WideDecode_Base16(Str,Ptr,Size,Reversed,WideEncodingTable_Hexadecimal);
 end;
 
+{==============================================================================}
+
+Function Decode_Base32(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode_Base32(Str,Size,Reversed);
+{$ELSE}
+Result := AnsiDecode_Base32(Str,Size,Reversed);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode_Base32(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer;
+begin
+Result := AnsiDecode_Base32(Str,Size,Reversed,AnsiEncodingTable_Base32,AnsiPaddingChar_Base32);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode_Base32(const Str: UnicodeString; out Size: Integer; Reversed: Boolean = False): Pointer;
+begin
+Result := WideDecode_Base32(Str,Size,Reversed,WideEncodingTable_Base32,WidePaddingChar_Base32);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Decode_Base32(const Str: String; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode_Base32(Str,Ptr,Size,Reversed);
+{$ELSE}
+Result := AnsiDecode_Base32(Str,Ptr,Size,Reversed);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode_Base32(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer;
+begin
+Result := AnsiDecode_Base32(Str,Ptr,Size,Reversed,AnsiEncodingTable_Base32,AnsiPaddingChar_Base32);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode_Base32(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer;
+begin
+Result := WideDecode_Base32(Str,Ptr,Size,Reversed,WideEncodingTable_Base32,WidePaddingChar_Base32);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Decode_Base32(const Str: String; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of Char; PaddingChar: Char): Pointer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode_Base32(Str,Size,Reversed,DecodingTable,PaddingChar);
+{$ELSE}
+Result := AnsiDecode_Base32(Str,Size,Reversed,DecodingTable,PaddingChar);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode_Base32(const Str: AnsiString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar; PaddingChar: AnsiChar): Pointer;
+begin
+Size := AnsiDecodedLength_Base32(Str,False,PaddingChar);
+Result := AllocMem(Size);
+try
+  Size := AnsiDecode_Base32(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+except
+  FreeMem(Result,Size);
+  Result := nil;
+  Size := 0;
+  raise;
+end;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode_Base32(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): Pointer;
+begin
+Size := WideDecodedLength_Base32(Str,False,PaddingChar);
+Result := AllocMem(Size);
+try
+  Size := WideDecode_Base32(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+except
+  FreeMem(Result,Size);
+  Result := nil;
+  Size := 0;
+  raise;
+end;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Decode_Base32(const Str: String; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of Char; PaddingChar: Char): Integer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode_Base32(Str,Ptr,Size,Reversed,DecodingTable,PaddingChar);
+{$ELSE}
+Result := AnsiDecode_Base32(Str,Ptr,Size,Reversed,DecodingTable,PaddingChar);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode_Base32(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar; PaddingChar: AnsiChar): Integer;
+var
+  Buffer:         Byte;
+  i:              Integer;
+  Remainder:      Byte;
+  RemainderBits:  Integer;
+  StrPosition:    Integer;
+begin
+Result := AnsiDecodedLength_Base32(Str,False,PaddingChar);
+DecodeCheckSize(Size,Result,32);
+ResolveDataPointer(Ptr,Reversed,Size);
+Remainder := 0;
+RemainderBits := 0;
+StrPosition := 1;
+For i := 0 to Pred(Result) do
+  begin
+    case RemainderBits of
+      0:  begin
+            Buffer := AnsiTableIndex(Str[StrPosition],DecodingTable,32) shl 3;
+            Remainder := AnsiTableIndex(Str[StrPosition + 1],DecodingTable,32);
+            Buffer := Buffer or (Remainder shr 2);
+            Inc(StrPosition,2);
+            Remainder := Remainder and $03;
+            RemainderBits := 2;
+          end;
+      1:  begin
+            Buffer := (Remainder shl 7) or (AnsiTableIndex(Str[StrPosition],DecodingTable,32) shl 2);
+            Remainder := AnsiTableIndex(Str[StrPosition + 1],DecodingTable,32);
+            Buffer := Buffer or (Remainder shr 3);
+            Inc(StrPosition,2);
+            Remainder := Remainder and $07;
+            RemainderBits := 3;
+          end;
+      2:  begin
+            Buffer := (Remainder shl 6) or (AnsiTableIndex(Str[StrPosition],DecodingTable,32) shl 1);
+            Remainder := AnsiTableIndex(Str[StrPosition + 1],DecodingTable,32);
+            Buffer := Buffer or (Remainder shr 4);
+            Inc(StrPosition,2);
+            Remainder := Remainder and $0F;
+            RemainderBits := 4;
+          end;
+      3:  begin
+            Buffer := (Remainder shl 5) or AnsiTableIndex(Str[StrPosition],DecodingTable,32);
+            Inc(StrPosition,1);
+            Remainder := 0;
+            RemainderBits := 0;
+          end;
+      4:  begin
+            Buffer := (Remainder shl 4) or (AnsiTableIndex(Str[StrPosition],DecodingTable,32) shr 1);
+            Remainder := AnsiTableIndex(Str[StrPosition],DecodingTable,32) and $01;
+            Inc(StrPosition,1);
+            RemainderBits := 1;
+          end;
+    else
+      raise EConvertError.CreateFmt('WideDecode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
+    end;
+    PByte(Ptr)^ := Buffer;
+    AdvanceDataPointer(Ptr,Reversed);
+  end;
+end;
+
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode_Base32(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): Integer;
+var
+  Buffer:         Byte;
+  i:              Integer;
+  Remainder:      Byte;
+  RemainderBits:  Integer;
+  StrPosition:    Integer;
+begin
+Result := WideDecodedLength_Base32(Str,False,PaddingChar);
+DecodeCheckSize(Size,Result,32);
+ResolveDataPointer(Ptr,Reversed,Size);
+Remainder := 0;
+RemainderBits := 0;
+StrPosition := 1;
+For i := 0 to Pred(Result) do
+  begin
+    case RemainderBits of
+      0:  begin
+            Buffer := WideTableIndex(Str[StrPosition],DecodingTable,32) shl 3;
+            Remainder := WideTableIndex(Str[StrPosition + 1],DecodingTable,32);
+            Buffer := Buffer or (Remainder shr 2);
+            Inc(StrPosition,2);
+            Remainder := Remainder and $03;
+            RemainderBits := 2;
+          end;
+      1:  begin
+            Buffer := (Remainder shl 7) or (WideTableIndex(Str[StrPosition],DecodingTable,32) shl 2);
+            Remainder := WideTableIndex(Str[StrPosition + 1],DecodingTable,32);
+            Buffer := Buffer or (Remainder shr 3);
+            Inc(StrPosition,2);
+            Remainder := Remainder and $07;
+            RemainderBits := 3;
+          end;
+      2:  begin
+            Buffer := (Remainder shl 6) or (WideTableIndex(Str[StrPosition],DecodingTable,32) shl 1);
+            Remainder := WideTableIndex(Str[StrPosition + 1],DecodingTable,32);
+            Buffer := Buffer or (Remainder shr 4);
+            Inc(StrPosition,2);
+            Remainder := Remainder and $0F;
+            RemainderBits := 4;
+          end;
+      3:  begin
+            Buffer := (Remainder shl 5) or WideTableIndex(Str[StrPosition],DecodingTable,32);
+            Inc(StrPosition,1);
+            Remainder := 0;
+            RemainderBits := 0;
+          end;
+      4:  begin
+            Buffer := (Remainder shl 4) or (WideTableIndex(Str[StrPosition],DecodingTable,32) shr 1);
+            Remainder := WideTableIndex(Str[StrPosition],DecodingTable,32) and $01;
+            Inc(StrPosition,1);
+            RemainderBits := 1;
+          end;
+    else
+      raise EConvertError.CreateFmt('WideDecode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
+    end;
+    PByte(Ptr)^ := Buffer;
+    AdvanceDataPointer(Ptr,Reversed);
+  end;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Decode_Base32Hex(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode_Base32Hex(Str,Size,Reversed);
+{$ELSE}
+Result := AnsiDecode_Base32Hex(Str,Size,Reversed);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode_Base32Hex(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer;
+begin
+Result := AnsiDecode_Base32(Str,Size,Reversed,AnsiEncodingTable_Base32Hex,AnsiPaddingChar_Base32Hex);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode_Base32Hex(const Str: UnicodeString; out Size: Integer; Reversed: Boolean = False): Pointer;
+begin
+Result := WideDecode_Base32(Str,Size,Reversed,WideEncodingTable_Base32Hex,WidePaddingChar_Base32Hex);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Decode_Base32Hex(const Str: String; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode_Base32Hex(Str,Ptr,Size,Reversed);
+{$ELSE}
+Result := AnsiDecode_Base32Hex(Str,Ptr,Size,Reversed);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode_Base32Hex(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer;
+begin
+Result := AnsiDecode_Base32(Str,Ptr,Size,Reversed,AnsiEncodingTable_Base32Hex,AnsiPaddingChar_Base32Hex);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode_Base32Hex(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer;
+begin
+Result := WideDecode_Base32(Str,Ptr,Size,Reversed,WideEncodingTable_Base32Hex,WidePaddingChar_Base32Hex);
+end;
 
 
 end.
