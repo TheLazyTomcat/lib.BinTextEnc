@@ -8,6 +8,7 @@
 
 todo
   - check all exception types
+  - replace "for i := 0 to Pred(...)" with "1 to ..." where possible
 
 ===============================================================================}
 unit BinTextEnc;
@@ -23,7 +24,6 @@ type
 
 {$IF not Defined(FPC) or not Defined(Unicode)}
   UnicodeChar   = WideChar;
-  PUnicodeChar  = ^UnicodeChar;
   UnicodeString = WideString;
 {$IFEND}
 
@@ -126,7 +126,7 @@ Function EncodedLength_Hexadecimal(DataSize: Integer; Header: Boolean = False): 
 Function EncodedLength_Base32(DataSize: Integer; Header: Boolean = False; Padding: Boolean = True): Integer;
 Function EncodedLength_Base32Hex(DataSize: Integer; Header: Boolean = False; Padding: Boolean = True): Integer;
 Function EncodedLength_Base64(DataSize: Integer; Header: Boolean = False; Padding: Boolean = True): Integer;
-Function EncodedLength_Base85(DataSize: Integer; Header: Boolean = False; Trim: Boolean = False): Integer;
+Function EncodedLength_Base85(Data: Pointer; DataSize: Integer; Reversed: Boolean; Header: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): Integer;
 
 {------------------------------------------------------------------------------}
 
@@ -248,6 +248,15 @@ Function Encode_Base64(Data: Pointer; Size: Integer; Reversed: Boolean; Padding:
 Function AnsiEncode_Base64(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar): AnsiString; overload;
 Function WideEncode_Base64(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): UnicodeString; overload;
 
+
+Function Encode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): String; overload;
+Function AnsiEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): AnsiString; overload;
+Function WideEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): UnicodeString; overload;
+
+Function Encode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of Char; CompressionChar: Char): String; overload;
+Function AnsiEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of AnsiChar; CompressionChar: AnsiChar): AnsiString; overload;
+Function WideEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of UnicodeChar; CompressionChar: UnicodeChar): UnicodeString; overload;
+
 {------------------------------------------------------------------------------}
 
 Function Decode_Base2(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
@@ -368,6 +377,23 @@ Function AnsiDecode_Base64(const Str: AnsiString; Ptr: Pointer; Size: Integer; R
 Function WideDecode_Base64(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): Integer; overload;
 
 
+Function Decode_Base85(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
+Function AnsiDecode_Base85(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
+Function WideDecode_Base85(const Str: UnicodeString; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
+
+Function Decode_Base85(const Str: String; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
+Function AnsiDecode_Base85(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
+Function WideDecode_Base85(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
+
+Function Decode_Base85(const Str: String; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of Char; CompressionChar: Char): Pointer; overload;
+Function AnsiDecode_Base85(const Str: AnsiString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar; CompressionChar: AnsiChar): Pointer; overload;
+Function WideDecode_Base85(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; CompressionChar: UnicodeChar): Pointer; overload;
+
+Function Decode_Base85(const Str: String; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of Char; CompressionChar: Char): Integer; overload;
+Function AnsiDecode_Base85(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar; CompressionChar: AnsiChar): Integer; overload;
+Function WideDecode_Base85(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; CompressionChar: UnicodeChar): Integer; overload;
+
+
 implementation
 
 uses
@@ -398,10 +424,12 @@ end;
 
 {------------------------------------------------------------------------------}
 
-procedure AdvanceDataPointer(var Ptr: Pointer; Reversed: Boolean);
+procedure AdvanceDataPointer(var Ptr: Pointer; Reversed: Boolean; Step: Byte = 1);
 begin
-If Reversed then Dec(PByte(Ptr))
-  else Inc(PByte(Ptr));
+If Reversed then
+  Ptr := Pointer(PtrUInt(Ptr) - Step)
+else
+  Ptr := Pointer(PtrUInt(Ptr) + Step);
 end;
 
 {------------------------------------------------------------------------------}
@@ -475,6 +503,22 @@ Result := 0;
 For i := 1 to Length(Str) do
   If Str[i] = Character then Inc(Result);
 end;
+
+{------------------------------------------------------------------------------}
+
+procedure SwapByteOrder(var Value: LongWord); register;
+{$IFDEF PurePascal}
+begin
+Value := (Value and $000000FF shl 24) or (Value and $0000FF00 shl 8) or
+         (Value and $00FF0000 shr 8) or (Value and $FF000000 shr 24);
+end;
+{$ELSE}
+asm
+  MOV   EDX, [Value]
+  BSWAP EDX
+  MOV   [Value], EDX
+end;
+{$ENDIF}
 
 {==============================================================================}
 {------------------------------------------------------------------------------}
@@ -563,12 +607,26 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function EncodedLength_Base85(DataSize: Integer; Header: Boolean = False; Trim: Boolean = False): Integer;
-{$MESSAGE 'Implement compression count.'}
+Function EncodedLength_Base85(Data: Pointer; DataSize: Integer; Reversed: Boolean; Header: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): Integer;
+
+  Function CountCompressible(Ptr: PLongWord): Integer;
+  var
+    ii: Integer;
+  begin
+    Result := 0;
+    ResolveDataPointer(Pointer(Ptr),Reversed,DataSize,4);
+    For ii := 1 to (DataSize div 4) do
+      begin
+        If PLongWord(Ptr)^ = 0 then Inc(Result);
+        AdvanceDataPointer(Pointer(Ptr),Reversed,4)
+      end;
+  end;
+
 begin
 If Trim then Result := Ceil(DataSize / 4) + DataSize
   else Result := Ceil(DataSize / 4) * 5;
 If Header then Result := Result + HeaderLength;
+If Compression then Result := Result - (CountCompressible(Data) * 4);
 If Result < 0 then Result := 0;
 end;
 
@@ -968,24 +1026,20 @@ end;
 {------------------------------------------------------------------------------}
 
 Function AnsiDecodedLength_Base85(const Str: AnsiString; Header: Boolean; CompressionChar: AnsiChar): Integer;
-var
-  UncompressedLength: Integer;
 begin
-UncompressedLength := Length(Str) + (AnsiCountChars(Str,CompressionChar) * 4);
-If Header then Result := (UncompressedLength - HeaderLength) - Ceil((UncompressedLength - HeaderLength) / 5)
-  else Result := UncompressedLength - Ceil(UncompressedLength / 5);
+Result := Length(Str) + (AnsiCountChars(Str,CompressionChar) * 4);
+If Header then Result := (Result - HeaderLength) - Ceil((Result - HeaderLength) / 5)
+  else Result := Result - Ceil(Result / 5);
 If Result < 0 then Result := 0;
 end;
 
 {------------------------------------------------------------------------------}
 
 Function WideDecodedLength_Base85(const Str: UnicodeString; Header: Boolean; CompressionChar: UnicodeChar): Integer;
-var
-  UncompressedLength: Integer;
 begin
-UncompressedLength := Length(Str) + (WideCountChars(Str,CompressionChar) * 4);
-If Header then Result := (UncompressedLength - HeaderLength) - Ceil((UncompressedLength - HeaderLength) / 5)
-  else Result := UncompressedLength - Ceil(UncompressedLength / 5);
+Result := Length(Str) + (WideCountChars(Str,CompressionChar) * 4);
+If Header then Result := (Result - HeaderLength) - Ceil((Result - HeaderLength) / 5)
+  else Result := Result - Ceil(Result / 5);
 If Result < 0 then Result := 0;
 end;
 
@@ -1479,7 +1533,7 @@ For i := 0 to Pred(Size) do
             RemainderBits := 2;
           end;
     else
-      raise EConvertError.CreateFmt('AnsiEncode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise Exception.CreateFmt('AnsiEncode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     AdvanceDataPointer(Data,Reversed);
   end;
@@ -1546,7 +1600,7 @@ For i := 0 to Pred(Size) do
             RemainderBits := 2;
           end;
     else
-      raise EConvertError.CreateFmt('WideEncode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise Exception.CreateFmt('WideEncode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     AdvanceDataPointer(Data,Reversed);
   end;
@@ -1661,7 +1715,7 @@ For i := 0 to Pred(Size) do
             RemainderBits := 0;
           end;
     else
-      raise EConvertError.CreateFmt('AnsiEncode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise Exception.CreateFmt('AnsiEncode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     AdvanceDataPointer(Data,Reversed);
   end;
@@ -1713,7 +1767,7 @@ For i := 0 to Pred(Size) do
             RemainderBits := 0;
           end;
     else
-      raise EConvertError.CreateFmt('WideEncode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise Exception.CreateFmt('WideEncode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     AdvanceDataPointer(Data,Reversed);
   end;
@@ -1726,6 +1780,119 @@ If Padding then
   For i := ResultPosition to Length(Result) do Result[i] := PaddingChar;
 end;
 
+{==============================================================================}
+
+Function Encode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): String;
+begin
+{$IFDEF Unicode}
+Result := WideEncode_Base85(Data,Size,Reversed,Compression,Trim);
+{$ELSE}
+Result := AnsiEncode_Base85(Data,Size,Reversed,Compression,Trim);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): AnsiString;
+begin
+Result := AnsiEncode_Base85(Data,Size,Reversed,Compression,Trim,AnsiEncodingTable_Base85,AnsiCompressionChar_Base85);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): UnicodeString;
+begin
+Result := WideEncode_Base85(Data,Size,Reversed,Compression,Trim,WideEncodingTable_Base85,WideCompressionChar_Base85);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Encode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of Char; CompressionChar: Char): String;
+begin
+{$IFDEF Unicode}
+Result := WideEncode_Base85(Data,Size,Reversed,Compression,Trim,EncodingTable,CompressionChar);
+{$ELSE}
+Result := AnsiEncode_Base85(Data,Size,Reversed,Compression,Trim,EncodingTable,CompressionChar);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of AnsiChar; CompressionChar: AnsiChar): AnsiString;
+var
+  Buffer:         LongWord;
+  i,j:            Integer;
+  ResultPosition: Integer;
+begin
+ResolveDataPointer(Data,Reversed,Size,4);
+SetLength(Result,EncodedLength_Base85(Data,Size,Reversed,False,Compression,Trim));
+ResultPosition := 1;
+For i := 1 to Ceil(Size / 4) do
+  begin
+    If (i * 4) > Size then
+      begin
+        Buffer := 0;
+        If Reversed then Move(Data^,Pointer(PtrUInt(@Buffer) - PtrUInt(Size and 3) + 4)^,Size and 3)
+          else Move(Pointer(PtrUInt(Data) + PtrUInt(Size) - PtrUInt(Size and 3))^,Buffer,Size and 3);
+      end
+    else Buffer := PLongWord(Data)^;
+    If not Reversed then SwapByteOrder(Buffer);
+    If (Buffer = 0) and Compression and ((i * 4) <= Size) then
+      begin
+        Result[ResultPosition] := CompressionChar;
+        Inc(ResultPosition);
+      end
+    else
+      begin
+        For j := 1 to Min(5,Length(Result) - ((i - 1) * 5)) do
+          begin
+            Result[ResultPosition + j - 1] := EncodingTable[Buffer div Coefficients_Base85[j]];
+            Buffer := Buffer mod Coefficients_Base85[j];            
+          end;
+        Inc(ResultPosition,5);
+      end;
+    AdvanceDataPointer(Data,Reversed,4);
+  end;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of UnicodeChar; CompressionChar: UnicodeChar): UnicodeString;
+var
+  Buffer:         LongWord;
+  i,j:            Integer;
+  ResultPosition: Integer;
+begin
+ResolveDataPointer(Data,Reversed,Size,4);
+SetLength(Result,EncodedLength_Base85(Data,Size,Reversed,False,Compression,Trim));
+ResultPosition := 1;
+For i := 1 to Ceil(Size / 4) do
+  begin
+    If (i * 4) > Size then
+      begin
+        Buffer := 0;
+        If Reversed then Move(Data^,Pointer(PtrUInt(@Buffer) - PtrUInt(Size and 3) + 4)^,Size and 3)
+          else Move(Pointer(PtrUInt(Data) + PtrUInt(Size) - PtrUInt(Size and 3))^,Buffer,Size and 3);
+      end
+    else Buffer := PLongWord(Data)^;
+    If not Reversed then SwapByteOrder(Buffer);
+    If (Buffer = 0) and Compression and ((i * 4) <= Size) then
+      begin
+        Result[ResultPosition] := CompressionChar;
+        Inc(ResultPosition);
+      end
+    else
+      begin
+        For j := 1 to Min(5,Length(Result) - ((i - 1) * 5)) do
+          begin
+            Result[ResultPosition + j - 1] := EncodingTable[Buffer div Coefficients_Base85[j]];
+            Buffer := Buffer mod Coefficients_Base85[j];            
+          end;
+        Inc(ResultPosition,5);
+      end;
+    AdvanceDataPointer(Data,Reversed,4);
+  end;
+end;
 
 {==============================================================================}
 {------------------------------------------------------------------------------}
@@ -1795,11 +1962,15 @@ end;
 {------------------------------------------------------------------------------}
 
 Function AnsiDecode_Base2(const Str: AnsiString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := AnsiDecodedLength_Base2(Str);
 Result := AllocMem(Size);
 try
-  Size := AnsiDecode_Base2(Str,Result,Size,Reversed,DecodingTable);
+  ResultSize := AnsiDecode_Base2(Str,Result,Size,Reversed,DecodingTable);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('AnsiDecode_Base2: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -1811,11 +1982,15 @@ end;
 {------------------------------------------------------------------------------}
 
 Function WideDecode_Base2(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of WideChar): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := WideDecodedLength_Base2(Str);
 Result := AllocMem(Size);
 try
-  Size := WideDecode_Base2(Str,Result,Size,Reversed,DecodingTable);
+  ResultSize := WideDecode_Base2(Str,Result,Size,Reversed,DecodingTable);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('WideDecode_Base2: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -1939,11 +2114,15 @@ end;
 {------------------------------------------------------------------------------}
 
 Function AnsiDecode_Base8(const Str: AnsiString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar; PaddingChar: AnsiChar): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := AnsiDecodedLength_Base8(Str,False,PaddingChar);
 Result := AllocMem(Size);
 try
-  Size := AnsiDecode_Base8(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+  ResultSize := AnsiDecode_Base8(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('AnsiDecode_Base8: Wrong result size (%d, expected %d)',[ResultSize,Size]);  
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -1954,12 +2133,16 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base8(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): Pointer; 
+Function WideDecode_Base8(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := WideDecodedLength_Base8(Str,False,PaddingChar);
 Result := AllocMem(Size);
 try
-  Size := WideDecode_Base8(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+  ResultSize := WideDecode_Base8(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('WideDecode_Base8: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2147,11 +2330,15 @@ end;
 {------------------------------------------------------------------------------}
 
 Function AnsiDecode_Base10(const Str: AnsiString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := AnsiDecodedLength_Base10(Str);
 Result := AllocMem(Size);
 try
-  Size := AnsiDecode_Base10(Str,Result,Size,Reversed,DecodingTable);
+  ResultSize := AnsiDecode_Base10(Str,Result,Size,Reversed,DecodingTable);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('AnsiDecode_Base10: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2163,11 +2350,15 @@ end;
 {------------------------------------------------------------------------------}
 
 Function WideDecode_Base10(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := WideDecodedLength_Base10(Str);
 Result := AllocMem(Size);
 try
-  Size := WideDecode_Base10(Str,Result,Size,Reversed,DecodingTable);
+  ResultSize := WideDecode_Base10(Str,Result,Size,Reversed,DecodingTable);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('WideDecode_Base10: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2288,11 +2479,15 @@ end;
 {------------------------------------------------------------------------------}
 
 Function AnsiDecode_Base16(const Str: AnsiString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := AnsiDecodedLength_Base16(Str);
 Result := AllocMem(Size);
 try
-  Size := AnsiDecode_Base16(Str,Result,Size,Reversed,DecodingTable);
+  ResultSize := AnsiDecode_Base16(Str,Result,Size,Reversed,DecodingTable);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('AnsiDecode_Base16: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2304,11 +2499,15 @@ end;
 {------------------------------------------------------------------------------}
 
 Function WideDecode_Base16(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := WideDecodedLength_Base16(Str);
 Result := AllocMem(Size);
 try
-  Size := WideDecode_Base16(Str,Result,Size,Reversed,DecodingTable);
+  ResultSize := WideDecode_Base16(Str,Result,Size,Reversed,DecodingTable);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('WideDecode_Base16: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2376,11 +2575,15 @@ end;
 {------------------------------------------------------------------------------}
 
 Function AnsiDecode_Hexadecimal(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := AnsiDecodedLength_Hexadecimal(Str);
 Result := AllocMem(Size);
 try
-  Size := AnsiDecode_Hexadecimal(Str,Result,Size,Reversed);
+  ResultSize := AnsiDecode_Hexadecimal(Str,Result,Size,Reversed);
+    If ResultSize <> Size then
+    raise Exception.CreateFmt('AnsiDecode_Hexadecimal: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2392,11 +2595,15 @@ end;
 {------------------------------------------------------------------------------}
 
 Function WideDecode_Hexadecimal(const Str: UnicodeString; out Size: Integer; Reversed: Boolean = False): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := WideDecodedLength_Hexadecimal(Str);
 Result := AllocMem(Size);
 try
-  Size := WideDecode_Hexadecimal(Str,Result,Size,Reversed);
+  ResultSize := WideDecode_Hexadecimal(Str,Result,Size,Reversed);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('WideDecode_Hexadecimal: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2494,11 +2701,15 @@ end;
 {------------------------------------------------------------------------------}
 
 Function AnsiDecode_Base32(const Str: AnsiString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar; PaddingChar: AnsiChar): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := AnsiDecodedLength_Base32(Str,False,PaddingChar);
 Result := AllocMem(Size);
 try
-  Size := AnsiDecode_Base32(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+  ResultSize := AnsiDecode_Base32(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('AnsiDecode_Base32: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2510,11 +2721,15 @@ end;
 {------------------------------------------------------------------------------}
 
 Function WideDecode_Base32(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := WideDecodedLength_Base32(Str,False,PaddingChar);
 Result := AllocMem(Size);
 try
-  Size := WideDecode_Base32(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+  ResultSize := WideDecode_Base32(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('WideDecode_Base32: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2590,7 +2805,7 @@ For i := 0 to Pred(Result) do
             RemainderBits := 1;
           end;
     else
-      raise EConvertError.CreateFmt('WideDecode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise Exception.CreateFmt('AnsiDecode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     PByte(Ptr)^ := Buffer;
     AdvanceDataPointer(Ptr,Reversed);
@@ -2654,7 +2869,7 @@ For i := 0 to Pred(Result) do
             RemainderBits := 1;
           end;
     else
-      raise EConvertError.CreateFmt('WideDecode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise Exception.CreateFmt('WideDecode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     PByte(Ptr)^ := Buffer;
     AdvanceDataPointer(Ptr,Reversed);
@@ -2775,11 +2990,15 @@ end;
 {------------------------------------------------------------------------------}
 
 Function AnsiDecode_Base64(const Str: AnsiString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar; PaddingChar: AnsiChar): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := AnsiDecodedLength_Base64(Str,False,PaddingChar);
 Result := AllocMem(Size);
 try
-  Size := AnsiDecode_Base64(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+  ResultSize := AnsiDecode_Base64(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('AnsiDecode_Base64: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2791,11 +3010,15 @@ end;
 {------------------------------------------------------------------------------}
 
 Function WideDecode_Base64(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): Pointer;
+var
+  ResultSize: Integer;
 begin
 Size := WideDecodedLength_Base64(Str,False,PaddingChar);
 Result := AllocMem(Size);
 try
-  Size := WideDecode_Base64(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+  ResultSize := WideDecode_Base64(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('WideDecode_Base64: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2855,7 +3078,7 @@ For i := 0 to Pred(Result) do
             RemainderBits := 2;
           end;
     else
-      raise EConvertError.CreateFmt('AnsiDecode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise Exception.CreateFmt('AnsiDecode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     PByte(Ptr)^ := Buffer;
     AdvanceDataPointer(Ptr,Reversed);
@@ -2902,13 +3125,207 @@ For i := 0 to Pred(Result) do
             RemainderBits := 2;
           end;
     else
-      raise EConvertError.CreateFmt('WideDecode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise Exception.CreateFmt('WideDecode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     PByte(Ptr)^ := Buffer;
     AdvanceDataPointer(Ptr,Reversed);
   end;
 end;
 
+{==============================================================================}
 
+Function Decode_Base85(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode_Base85(Str,Size,Reversed);
+{$ELSE}
+Result := AnsiDecode_Base85(Str,Size,Reversed);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode_Base85(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer;
+begin
+Result := AnsiDecode_Base85(Str,Size,Reversed,AnsiEncodingTable_Base85,AnsiCompressionChar_Base85);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode_Base85(const Str: UnicodeString; out Size: Integer; Reversed: Boolean = False): Pointer;
+begin
+Result := WideDecode_Base85(Str,Size,Reversed,WideEncodingTable_Base85,WideCompressionChar_Base85);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Decode_Base85(const Str: String; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode_Base85(Str,Ptr,Size,Reversed);
+{$ELSE}
+Result := AnsiDecode_Base85(Str,Ptr,Size,Reversed);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode_Base85(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer;
+begin
+Result := AnsiDecode_Base85(Str,Ptr,Size,Reversed,AnsiEncodingTable_Base85,AnsiCompressionChar_Base85);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode_Base85(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer;
+begin
+Result := WideDecode_Base85(Str,Ptr,Size,Reversed,WideEncodingTable_Base85,WideCompressionChar_Base85);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Decode_Base85(const Str: String; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of Char; CompressionChar: Char): Pointer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode_Base85(Str,Size,Reversed,DecodingTable,CompressionChar);
+{$ELSE}
+Result := AnsiDecode_Base85(Str,Size,Reversed,DecodingTable,CompressionChar);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode_Base85(const Str: AnsiString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar; CompressionChar: AnsiChar): Pointer;
+var
+  ResultSize: Integer;
+begin
+Size := AnsiDecodedLength_Base85(Str,False,CompressionChar);
+Result := AllocMem(Size);
+try
+  ResultSize := AnsiDecode_Base85(Str,Result,Size,Reversed,DecodingTable,CompressionChar);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('AnsiDecode_Base85: Wrong result size (%d, expected %d)',[ResultSize,Size]);   
+except
+  FreeMem(Result,Size);
+  Result := nil;
+  Size := 0;
+  raise;
+end;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode_Base85(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; CompressionChar: UnicodeChar): Pointer;
+var
+  ResultSize: Integer;
+begin
+Size := WideDecodedLength_Base85(Str,False,CompressionChar);
+Result := AllocMem(Size);
+try
+  ResultSize := WideDecode_Base85(Str,Result,Size,Reversed,DecodingTable,CompressionChar);
+  If ResultSize <> Size then
+    raise Exception.CreateFmt('WideDecode_Base85: Wrong result size (%d, expected %d)',[ResultSize,Size]);  
+except
+  FreeMem(Result,Size);
+  Result := nil;
+  Size := 0;
+  raise;
+end;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Decode_Base85(const Str: String; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of Char; CompressionChar: Char): Integer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode_Base85(Str,Ptr,Size,Reversed,DecodingTable,CompressionChar);
+{$ELSE}
+Result := AnsiDecode_Base85(Str,Ptr,Size,Reversed,DecodingTable,CompressionChar);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode_Base85(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar; CompressionChar: AnsiChar): Integer;
+var
+  i,j:          Integer;
+  Buffer:       LongWord;
+  StrPosition:  Integer;
+begin
+Result := AnsiDecodedLength_Base85(Str,False,CompressionChar);
+DecodeCheckSize(Size,Result,85);
+ResolveDataPointer(Ptr,Reversed,Size,4);
+StrPosition := 1;
+For i := 1 to Ceil(Result / 4) do
+  begin
+    If Str[StrPosition] = CompressionChar then
+      begin
+        Buffer := $00000000;
+        Inc(StrPosition);
+      end
+    else
+      begin
+        Buffer := 0;
+        For j := 0 to 4 do
+          If (StrPosition + j) <= Length(Str) then
+            Buffer := Buffer + (AnsiTableIndex(Str[StrPosition + j],DecodingTable,85) * Coefficients_Base85[j + 1])
+          else
+            Buffer := Buffer + (84 * Coefficients_Base85[j + 1]);
+        Inc(StrPosition,5);
+      end;
+    If not Reversed then SwapByteOrder(Buffer);
+    If (i * 4) > Result  then
+      begin
+        If Reversed then
+          Move(Pointer(PtrUInt(@Buffer) - PtrUInt(Result and 3) + 4)^,Pointer(PtrUInt(@Ptr) - PtrUInt(Result and 3) + 4)^,Result and 3)
+        else
+          Move(Buffer,Ptr^,Result and 3);
+      end
+    else PLongWord(Ptr)^ := Buffer;
+    AdvanceDataPointer(Ptr,Reversed,4);
+  end;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode_Base85(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; CompressionChar: UnicodeChar): Integer;
+var
+  i,j:          Integer;
+  Buffer:       LongWord;
+  StrPosition:  Integer;
+begin
+Result := WideDecodedLength_Base85(Str,False,CompressionChar);
+DecodeCheckSize(Size,Result,85);
+ResolveDataPointer(Ptr,Reversed,Size,4);
+StrPosition := 1;
+For i := 1 to Ceil(Result / 4) do
+  begin
+    If Str[StrPosition] = CompressionChar then
+      begin
+        Buffer := $00000000;
+        Inc(StrPosition);
+      end
+    else
+      begin
+        Buffer := 0;
+        For j := 0 to 4 do
+          If (StrPosition + j) <= Length(Str) then
+            Buffer := Buffer + (WideTableIndex(Str[StrPosition + j],DecodingTable,85) * Coefficients_Base85[j + 1])
+          else
+            Buffer := Buffer + (84 * Coefficients_Base85[j + 1]);
+        Inc(StrPosition,5);
+      end;
+    If not Reversed then SwapByteOrder(Buffer);
+    If (i * 4) > Result  then
+      begin
+        If Reversed then
+          Move(Pointer(PtrUInt(@Buffer) - PtrUInt(Result and 3) + 4)^,Pointer(PtrUInt(@Ptr) - PtrUInt(Result and 3) + 4)^,Result and 3)
+        else
+          Move(Buffer,Ptr^,Result and 3);
+      end
+    else PLongWord(Ptr)^ := Buffer;
+    AdvanceDataPointer(Ptr,Reversed,4);
+  end;
+end;
 
 end.
