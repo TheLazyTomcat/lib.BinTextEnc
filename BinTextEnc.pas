@@ -15,6 +15,9 @@ unit BinTextEnc;
 
 interface
 
+uses
+  SysUtils;
+
 type
 {$IFDEF x64}
   PtrUInt = UInt64;
@@ -30,6 +33,14 @@ type
   TBinTextEncoding = (bteUnknown,bteBase2,bteBase8,bteBase10,bteNumber,
                       bteBase16,bteHexadecimal,bteBase32,bteBase32Hex,
                       bteBase64,bteBase85);
+
+  EBinTextEncError     = class(Exception);
+  EUnknownEncoding     = class(EBinTextEncError);
+  EUnsupportedEncoding = class(EBinTextEncError);
+  EEncodingError       = class(EBinTextEncError);
+  EDecodingError       = class(EBinTextEncError);
+  EAllocationError     = class(EBinTextEncError);
+  EInvalidCharacter    = class(EBinTextEncError);
 
 const
   AnsiPaddingChar_Base8     = AnsiChar('=');
@@ -437,7 +448,7 @@ Function WideDecode_Base85(const Str: UnicodeString; Ptr: Pointer; Size: Integer
 implementation
 
 uses
-  SysUtils, Math;
+  Math;
 
 const
   AnsiEncodingHexadecimal = AnsiChar('$');
@@ -490,7 +501,7 @@ end;
 procedure DecodeCheckSize(Size, Required, Base: Integer);
 begin
 If Size < Required then
-  raise Exception.CreateFmt('Decoding[base%d]: Output buffer too small (%d, required %d).',[Base,Size,Required]);
+  raise EAllocationError.CreateFmt('Decoding[base%d]: Output buffer too small (%d, required %d).',[Base,Size,Required]);
 end;
 
 {------------------------------------------------------------------------------}
@@ -499,7 +510,7 @@ Function AnsiTableIndex(const aChar: AnsiChar; const Table: Array of AnsiChar; B
 begin
 For Result := Low(Table) to High(Table) do
   If Table[Result] = aChar then Exit;
-raise Exception.CreateFmt('AnsiTableIndex[base%d]: Invalid character "%s" (#%d).',[Base,aChar,Ord(aChar)]);
+raise EInvalidCharacter.CreateFmt('AnsiTableIndex[base%d]: Invalid character "%s" (#%d).',[Base,aChar,Ord(aChar)]);
 end;
 
 {------------------------------------------------------------------------------}
@@ -508,7 +519,7 @@ Function WideTableIndex(const aChar: UnicodeChar; const Table: Array of UnicodeC
 begin
 For Result := Low(Table) to High(Table) do
   If Table[Result] = aChar then Exit;
-raise Exception.CreateFmt('WideTableIndex[base%d]: Invalid character "%s" (#%d).',[Base,aChar,Ord(aChar)]);
+raise EInvalidCharacter.CreateFmt('WideTableIndex[base%d]: Invalid character "%s" (#%d).',[Base,aChar,Ord(aChar)]);
 end;
 
 {------------------------------------------------------------------------------}
@@ -702,10 +713,10 @@ case Encoding of
   bteBase32:      Result := EncodedLength_Base32Hex(DataSize,Header,Padding);
   bteBase32Hex:   Result := EncodedLength_Base32(DataSize,Header,Padding);
   bteBase64:      Result := EncodedLength_Base64(DataSize,Header,Padding);
-  bteBase85:      raise Exception.Create('EncodedLength: Base85 encoding is not supported by this function.');
+  bteBase85:      raise EUnsupportedEncoding.Create('EncodedLength: Base85 encoding is not supported by this function.');
 else
   {bteUnknown, ...}
-  raise Exception.CreateFmt('EncodedLength: Unknown encoding (%d).',[Integer(Encoding)]);
+  raise EUnknownEncoding.CreateFmt('EncodedLength: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
 
@@ -737,7 +748,7 @@ case Encoding of
   bteBase85:      Result := AnsiDecodedLength_Base85(Str,Header,AnsiCompressionChar_Base85);
 else
   {bteUnknown, ...}
-  raise Exception.CreateFmt('AnsiDecodedLength: Unknown encoding (%d).',[Integer(Encoding)]);
+  raise EUnknownEncoding.CreateFmt('AnsiDecodedLength: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
 
@@ -758,7 +769,7 @@ case Encoding of
   bteBase85:      Result := WideDecodedLength_Base85(Str,Header,WideCompressionChar_Base85);
 else
   {bteUnknown, ...}
-  raise Exception.CreateFmt('WideDecodedLength: Unknown encoding (%d).',[Integer(Encoding)]);
+  raise EUnknownEncoding.CreateFmt('WideDecodedLength: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
 
@@ -799,7 +810,7 @@ case Encoding of
   bteBase85:      Result := BuildHeader(ENCNUM_BASE85) + AnsiEncode_Base85(Data,Size,Reversed,True,not Padding);
 else
   {bteUnknown}
-  raise Exception.CreateFmt('AnsiEncode: Unknown encoding (%d).',[Integer(Encoding)]);
+  raise EUnknownEncoding.CreateFmt('AnsiEncode: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
 
@@ -828,7 +839,7 @@ case Encoding of
   bteBase85:      Result := BuildHeader(ENCNUM_BASE85) + WideEncode_Base85(Data,Size,Reversed,True,not Padding);
 else
   {bteUnknown}
-  raise Exception.CreateFmt('WideEncode: Unknown encoding (%d).',[Integer(Encoding)]);
+  raise EUnknownEncoding.CreateFmt('WideEncode: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
 
@@ -919,7 +930,7 @@ case Encoding of
   bteBase64:      Result := AnsiDecode_Base64(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
   bteBase85:      Result := AnsiDecode_Base85(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
 else
-  raise Exception.CreateFmt('AnsiDecode: Unknown encoding (%d).',[Integer(Encoding)]);
+  raise EUnknownEncoding.CreateFmt('AnsiDecode: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
 
@@ -940,7 +951,7 @@ case Encoding of
   bteBase64:      Result := WideDecode_Base64(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
   bteBase85:      Result := WideDecode_Base85(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
 else
-  raise Exception.CreateFmt('WideDecode: Unknown encoding (%d).',[Integer(Encoding)]);
+  raise EUnknownEncoding.CreateFmt('WideDecode: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
 
@@ -1031,7 +1042,7 @@ case Encoding of
   bteBase64:      Result := AnsiDecode_Base64(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
   bteBase85:      Result := AnsiDecode_Base85(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
 else
-  raise Exception.CreateFmt('AnsiDecode: Unknown encoding (%d).',[Integer(Encoding)]);
+  raise EUnknownEncoding.CreateFmt('AnsiDecode: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
 
@@ -1052,7 +1063,7 @@ case Encoding of
   bteBase64:      Result := WideDecode_Base64(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
   bteBase85:      Result := WideDecode_Base85(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
 else
-  raise Exception.CreateFmt('WideDecode: Unknown encoding (%d).',[Integer(Encoding)]);
+  raise EUnknownEncoding.CreateFmt('WideDecode: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
 {==============================================================================}
@@ -1739,7 +1750,7 @@ For i := 1 to Size do
             RemainderBits := 1;
           end;
     else
-      raise Exception.CreateFmt('AnsiEncode_Base8: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise EEncodingError.CreateFmt('AnsiEncode_Base8: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     AdvanceDataPointer(Data,Reversed);
   end;
@@ -1795,7 +1806,7 @@ For i := 1 to Size do
             RemainderBits := 1;
           end;
     else
-      raise Exception.CreateFmt('WideEncode_Base8: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise EEncodingError.CreateFmt('WideEncode_Base8: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     AdvanceDataPointer(Data,Reversed);
   end;
@@ -2068,7 +2079,7 @@ For i := 1 to Size do
             RemainderBits := 2;
           end;
     else
-      raise Exception.CreateFmt('AnsiEncode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise EEncodingError.CreateFmt('AnsiEncode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     AdvanceDataPointer(Data,Reversed);
   end;
@@ -2135,7 +2146,7 @@ For i := 1 to Size do
             RemainderBits := 2;
           end;
     else
-      raise Exception.CreateFmt('WideEncode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise EEncodingError.CreateFmt('WideEncode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     AdvanceDataPointer(Data,Reversed);
   end;
@@ -2250,7 +2261,7 @@ For i := 1 to Size do
             RemainderBits := 0;
           end;
     else
-      raise Exception.CreateFmt('AnsiEncode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise EEncodingError.CreateFmt('AnsiEncode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     AdvanceDataPointer(Data,Reversed);
   end;
@@ -2302,7 +2313,7 @@ For i := 1 to Size do
             RemainderBits := 0;
           end;
     else
-      raise Exception.CreateFmt('WideEncode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise EEncodingError.CreateFmt('WideEncode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     AdvanceDataPointer(Data,Reversed);
   end;
@@ -2505,7 +2516,7 @@ Result := AllocMem(Size);
 try
   ResultSize := AnsiDecode_Base2(Str,Result,Size,Reversed,DecodingTable);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('AnsiDecode_Base2: Wrong result size (%d, expected %d)',[ResultSize,Size]);
+    raise EAllocationError.CreateFmt('AnsiDecode_Base2: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2525,7 +2536,7 @@ Result := AllocMem(Size);
 try
   ResultSize := WideDecode_Base2(Str,Result,Size,Reversed,DecodingTable);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('WideDecode_Base2: Wrong result size (%d, expected %d)',[ResultSize,Size]);
+    raise EAllocationError.CreateFmt('WideDecode_Base2: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2657,7 +2668,7 @@ Result := AllocMem(Size);
 try
   ResultSize := AnsiDecode_Base8(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('AnsiDecode_Base8: Wrong result size (%d, expected %d)',[ResultSize,Size]);  
+    raise EAllocationError.CreateFmt('AnsiDecode_Base8: Wrong result size (%d, expected %d)',[ResultSize,Size]);  
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2677,7 +2688,7 @@ Result := AllocMem(Size);
 try
   ResultSize := WideDecode_Base8(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('WideDecode_Base8: Wrong result size (%d, expected %d)',[ResultSize,Size]);
+    raise EAllocationError.CreateFmt('WideDecode_Base8: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2742,7 +2753,7 @@ For i := 1 to Result do
             RemainderBits := 0;
           end;
     else
-      raise Exception.CreateFmt('AnsiDecode_Base8: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise EDecodingError.CreateFmt('AnsiDecode_Base8: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     PByte(Ptr)^ := Buffer;
     AdvanceDataPointer(Ptr,Reversed);
@@ -2794,7 +2805,7 @@ For i := 1 to Result do
             RemainderBits := 0;
           end;
     else
-      raise Exception.CreateFmt('WideDecode_Base8: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise EDecodingError.CreateFmt('WideDecode_Base8: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     PByte(Ptr)^ := Buffer;
     AdvanceDataPointer(Ptr,Reversed);
@@ -2873,7 +2884,7 @@ Result := AllocMem(Size);
 try
   ResultSize := AnsiDecode_Base10(Str,Result,Size,Reversed,DecodingTable);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('AnsiDecode_Base10: Wrong result size (%d, expected %d)',[ResultSize,Size]);
+    raise EAllocationError.CreateFmt('AnsiDecode_Base10: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -2893,7 +2904,7 @@ Result := AllocMem(Size);
 try
   ResultSize := WideDecode_Base10(Str,Result,Size,Reversed,DecodingTable);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('WideDecode_Base10: Wrong result size (%d, expected %d)',[ResultSize,Size]);
+    raise EAllocationError.CreateFmt('WideDecode_Base10: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -3022,7 +3033,7 @@ Result := AllocMem(Size);
 try
   ResultSize := AnsiDecode_Base16(Str,Result,Size,Reversed,DecodingTable);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('AnsiDecode_Base16: Wrong result size (%d, expected %d)',[ResultSize,Size]);
+    raise EAllocationError.CreateFmt('AnsiDecode_Base16: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -3042,7 +3053,7 @@ Result := AllocMem(Size);
 try
   ResultSize := WideDecode_Base16(Str,Result,Size,Reversed,DecodingTable);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('WideDecode_Base16: Wrong result size (%d, expected %d)',[ResultSize,Size]);
+    raise EAllocationError.CreateFmt('WideDecode_Base16: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -3118,7 +3129,7 @@ Result := AllocMem(Size);
 try
   ResultSize := AnsiDecode_Hexadecimal(Str,Result,Size,Reversed);
     If ResultSize <> Size then
-    raise Exception.CreateFmt('AnsiDecode_Hexadecimal: Wrong result size (%d, expected %d)',[ResultSize,Size]);
+      raise EAllocationError.CreateFmt('AnsiDecode_Hexadecimal: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -3138,7 +3149,7 @@ Result := AllocMem(Size);
 try
   ResultSize := WideDecode_Hexadecimal(Str,Result,Size,Reversed);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('WideDecode_Hexadecimal: Wrong result size (%d, expected %d)',[ResultSize,Size]);
+    raise EAllocationError.CreateFmt('WideDecode_Hexadecimal: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -3244,7 +3255,7 @@ Result := AllocMem(Size);
 try
   ResultSize := AnsiDecode_Base32(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('AnsiDecode_Base32: Wrong result size (%d, expected %d)',[ResultSize,Size]);
+    raise EAllocationError.CreateFmt('AnsiDecode_Base32: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -3264,7 +3275,7 @@ Result := AllocMem(Size);
 try
   ResultSize := WideDecode_Base32(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('WideDecode_Base32: Wrong result size (%d, expected %d)',[ResultSize,Size]);
+    raise EAllocationError.CreateFmt('WideDecode_Base32: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -3340,7 +3351,7 @@ For i := 1 to Result do
             RemainderBits := 1;
           end;
     else
-      raise Exception.CreateFmt('AnsiDecode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise EDecodingError.CreateFmt('AnsiDecode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     PByte(Ptr)^ := Buffer;
     AdvanceDataPointer(Ptr,Reversed);
@@ -3404,7 +3415,7 @@ For i := 1 to Result do
             RemainderBits := 1;
           end;
     else
-      raise Exception.CreateFmt('WideDecode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise EDecodingError.CreateFmt('WideDecode_Base32: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     PByte(Ptr)^ := Buffer;
     AdvanceDataPointer(Ptr,Reversed);
@@ -3533,7 +3544,7 @@ Result := AllocMem(Size);
 try
   ResultSize := AnsiDecode_Base64(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('AnsiDecode_Base64: Wrong result size (%d, expected %d)',[ResultSize,Size]);
+    raise EAllocationError.CreateFmt('AnsiDecode_Base64: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -3553,7 +3564,7 @@ Result := AllocMem(Size);
 try
   ResultSize := WideDecode_Base64(Str,Result,Size,Reversed,DecodingTable,PaddingChar);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('WideDecode_Base64: Wrong result size (%d, expected %d)',[ResultSize,Size]);
+    raise EAllocationError.CreateFmt('WideDecode_Base64: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -3613,7 +3624,7 @@ For i := 1 to Result do
             RemainderBits := 2;
           end;
     else
-      raise Exception.CreateFmt('AnsiDecode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise EDecodingError.CreateFmt('AnsiDecode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     PByte(Ptr)^ := Buffer;
     AdvanceDataPointer(Ptr,Reversed);
@@ -3660,7 +3671,7 @@ For i := 1 to Result do
             RemainderBits := 2;
           end;
     else
-      raise Exception.CreateFmt('WideDecode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
+      raise EDecodingError.CreateFmt('WideDecode_Base64: Invalid RemainderBits value (%d).',[RemainderBits]);
     end;
     PByte(Ptr)^ := Buffer;
     AdvanceDataPointer(Ptr,Reversed);
@@ -3739,7 +3750,7 @@ Result := AllocMem(Size);
 try
   ResultSize := AnsiDecode_Base85(Str,Result,Size,Reversed,DecodingTable,CompressionChar);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('AnsiDecode_Base85: Wrong result size (%d, expected %d)',[ResultSize,Size]);   
+    raise EAllocationError.CreateFmt('AnsiDecode_Base85: Wrong result size (%d, expected %d)',[ResultSize,Size]);   
 except
   FreeMem(Result,Size);
   Result := nil;
@@ -3759,7 +3770,7 @@ Result := AllocMem(Size);
 try
   ResultSize := WideDecode_Base85(Str,Result,Size,Reversed,DecodingTable,CompressionChar);
   If ResultSize <> Size then
-    raise Exception.CreateFmt('WideDecode_Base85: Wrong result size (%d, expected %d)',[ResultSize,Size]);  
+    raise EAllocationError.CreateFmt('WideDecode_Base85: Wrong result size (%d, expected %d)',[ResultSize,Size]);
 except
   FreeMem(Result,Size);
   Result := nil;
