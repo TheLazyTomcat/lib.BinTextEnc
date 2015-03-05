@@ -115,7 +115,47 @@ const
      ':','+','=','^','!','/','*','?','&','<','>','(',')','[',']','{',
      '}','@','%','$','#');
 
-{------------------------------------------------------------------------------}     
+{------------------------------------------------------------------------------}
+
+Function GetEncoding(const Str: String; out Reversed: Boolean): TBinTextEncoding;
+Function AnsiGetEncoding(const Str: AnsiString; out Reversed: Boolean): TBinTextEncoding;
+Function WideGetEncoding(const Str: UnicodeString; out Reversed: Boolean): TBinTextEncoding;
+
+Function EncodedLength(Encoding: TBinTextEncoding; DataSize: Integer; Header: Boolean = False; Padding: Boolean = True): Integer;
+
+Function DecodedLength(Encoding: TBinTextEncoding; const Str: String; Header: Boolean = True): Integer;
+Function AnsiDecodedLength(Encoding: TBinTextEncoding; const Str: AnsiString; Header: Boolean = True): Integer;
+Function WideDecodedLength(Encoding: TBinTextEncoding; const Str: UnicodeString; Header: Boolean = True): Integer;
+
+Function Encode(Encoding: TBinTextEncoding; Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): String;
+Function AnsiEncode(Encoding: TBinTextEncoding; Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): AnsiString;
+Function WideEncode(Encoding: TBinTextEncoding; Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): UnicodeString;
+
+Function Decode(const Str: String; out Size: Integer): Pointer; overload;
+Function AnsiDecode(const Str: AnsiString; out Size: Integer): Pointer; overload;
+Function WideDecode(const Str: UnicodeString; out Size: Integer): Pointer; overload;
+
+Function Decode(const Str: String; out Size: Integer; out Encoding: TBinTextEncoding): Pointer; overload;
+Function AnsiDecode(const Str: AnsiString; out Size: Integer; out Encoding: TBinTextEncoding): Pointer; overload;
+Function WideDecode(const Str: UnicodeString; out Size: Integer; out Encoding: TBinTextEncoding): Pointer; overload;
+
+Function Decode(const Str: String; out Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Pointer; overload;
+Function AnsiDecode(const Str: AnsiString; out Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Pointer; overload;
+Function WideDecode(const Str: UnicodeString; out Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Pointer; overload;
+
+Function Decode(const Str: String; Ptr: Pointer; Size: Integer): Integer; overload;
+Function AnsiDecode(const Str: AnsiString; Ptr: Pointer; Size: Integer): Integer; overload;
+Function WideDecode(const Str: UnicodeString; Ptr: Pointer; Size: Integer): Integer; overload;
+
+Function Decode(const Str: String; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding): Integer; overload;
+Function AnsiDecode(const Str: AnsiString; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding): Integer; overload;
+Function WideDecode(const Str: UnicodeString; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding): Integer; overload;
+
+Function Decode(const Str: String; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Integer; overload;
+Function AnsiDecode(const Str: AnsiString; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Integer; overload;
+Function WideDecode(const Str: UnicodeString; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Integer; overload;
+
+{------------------------------------------------------------------------------}
 
 Function EncodedLength_Base2(DataSize: Integer; Header: Boolean = False): Integer;
 Function EncodedLength_Base8(DataSize: Integer; Header: Boolean = False; Padding: Boolean = True): Integer;
@@ -126,7 +166,7 @@ Function EncodedLength_Hexadecimal(DataSize: Integer; Header: Boolean = False): 
 Function EncodedLength_Base32(DataSize: Integer; Header: Boolean = False; Padding: Boolean = True): Integer;
 Function EncodedLength_Base32Hex(DataSize: Integer; Header: Boolean = False; Padding: Boolean = True): Integer;
 Function EncodedLength_Base64(DataSize: Integer; Header: Boolean = False; Padding: Boolean = True): Integer;
-Function EncodedLength_Base85(Data: Pointer; DataSize: Integer; Reversed: Boolean; Header: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): Integer;
+Function EncodedLength_Base85(Data: Pointer; DataSize: Integer; Reversed: Boolean; Header: Boolean = False; Compression: Boolean = True; Trim: Boolean = True): Integer;
 
 {------------------------------------------------------------------------------}
 
@@ -249,9 +289,9 @@ Function AnsiEncode_Base64(Data: Pointer; Size: Integer; Reversed: Boolean; Padd
 Function WideEncode_Base64(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): UnicodeString; overload;
 
 
-Function Encode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): String; overload;
-Function AnsiEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): AnsiString; overload;
-Function WideEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): UnicodeString; overload;
+Function Encode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True): String; overload;
+Function AnsiEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True): AnsiString; overload;
+Function WideEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True): UnicodeString; overload;
 
 Function Encode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of Char; CompressionChar: Char): String; overload;
 Function AnsiEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of AnsiChar; CompressionChar: AnsiChar): AnsiString; overload;
@@ -269,11 +309,11 @@ Function WideDecode_Base2(const Str: UnicodeString; Ptr: Pointer; Size: Integer;
 
 Function Decode_Base2(const Str: String; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of Char): Pointer; overload;
 Function AnsiDecode_Base2(const Str: AnsiString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar): Pointer; overload;
-Function WideDecode_Base2(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of WideChar): Pointer; overload;
+Function WideDecode_Base2(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar): Pointer; overload;
 
 Function Decode_Base2(const Str: String; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of Char): Integer; overload;
 Function AnsiDecode_Base2(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar): Integer; overload;
-Function WideDecode_Base2(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of WideChar): Integer; overload;
+Function WideDecode_Base2(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar): Integer; overload;
 
 
 Function Decode_Base8(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
@@ -399,13 +439,26 @@ implementation
 uses
   SysUtils, Math;
 
-{$MESSAGE 'temporary'}
 const
-  EncodingHexadecimal = '$';
-  EncodingHeaderStart = '#';
-  EncodingHeaderEnd   = ':';
+  AnsiEncodingHexadecimal = AnsiChar('$');
+  AnsiEncodingHeaderStart = AnsiChar('#');
+  AnsiEncodingHeaderEnd   = AnsiChar(':');
 
-  HeaderLength = Length(EncodingHeaderStart + '00' + EncodingHeaderEnd);
+  WideEncodingHexadecimal = UnicodeChar('$');
+  WideEncodingHeaderStart = UnicodeChar('#');
+  WideEncodingHeaderEnd   = UnicodeChar(':');
+
+  HeaderLength = Length(AnsiEncodingHeaderStart + '00' + AnsiEncodingHeaderEnd);
+
+  ENCNUM_BASE2     = 2;
+  ENCNUM_BASE8     = 8;
+  ENCNUM_BASE10    = 10;
+  ENCNUM_NUMBER    = 11;
+  ENCNUM_BASE16    = 16;
+  ENCNUM_BASE32    = 32;
+  ENCNUM_BASE32HEX = 33;
+  ENCNUM_BASE64    = 64;
+  ENCNUM_BASE85    = 85;  
 
   Coefficients_Base10: Array[1..3] of Word     = (100,10,1);
   Coefficients_Base85: Array[1..5] of LongWord = (52200625,614125,7225,85,1);
@@ -451,7 +504,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function WideTableIndex(const aChar: WideChar; const Table: Array of WideChar; Base: Integer): Byte;
+Function WideTableIndex(const aChar: UnicodeChar; const Table: Array of UnicodeChar; Base: Integer): Byte;
 begin
 For Result := Low(Table) to High(Table) do
   If Table[Result] = aChar then Exit;
@@ -472,7 +525,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function WideCountPadding(Str: UnicodeString; PaddingChar: WideChar): Integer;
+Function WideCountPadding(Str: UnicodeString; PaddingChar: UnicodeChar): Integer;
 var
   i:  Integer;
 begin
@@ -520,6 +573,488 @@ asm
 end;
 {$ENDIF}
 
+{==============================================================================}
+{------------------------------------------------------------------------------}
+{    Universal functions                                                       }
+{------------------------------------------------------------------------------}
+{==============================================================================}
+
+Function GetEncoding(const Str: String; out Reversed: Boolean): TBinTextEncoding;
+begin
+{$IFDEF Unicode}
+Result := WideGetEncoding(Str,Reversed);
+{$ELSE}
+Result := AnsiGetEncoding(Str,Reversed);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiGetEncoding(const Str: AnsiString; out Reversed: Boolean): TBinTextEncoding;
+var
+  EncByte:  Byte;
+begin
+If Length(Str) > 0 then
+  begin
+    case Str[1] of
+{---  ----    ----    ----    ----    ----    ----    ----    ----    ----  ---}
+      AnsiEncodingHexadecimal:
+        begin
+          Reversed := False;
+          Result := bteHexadecimal;
+        end;
+{---  ----    ----    ----    ----    ----    ----    ----    ----    ----  ---}
+      AnsiEncodingHeaderStart:
+        begin
+          If Length(Str) >= HeaderLength then
+            begin
+              If Str[HeaderLength] = AnsiEncodingHeaderEnd then
+                begin
+                  AnsiDecode_Hexadecimal(Copy(Str,1 + Length(AnsiEncodingHeaderStart),2),@EncByte,SizeOf(EncByte),False);
+                  Reversed := (EncByte and $80) <> 0;
+                  case (EncByte and $7F) of
+                    ENCNUM_BASE2:     Result := bteBase2;
+                    ENCNUM_BASE8:     Result := bteBase8;
+                    ENCNUM_BASE10:    Result := bteBase10;
+                    ENCNUM_NUMBER:    Result := bteNumber;
+                    ENCNUM_BASE16:    Result := bteBase16;
+                    ENCNUM_BASE32:    Result := bteBase32;
+                    ENCNUM_BASE32HEX: Result := bteBase32Hex;
+                    ENCNUM_BASE64:    Result := bteBase64;
+                    ENCNUM_BASE85:    Result := bteBase85;
+                  else
+                    Result := bteUnknown;
+                  end;
+                end
+              else Result := bteUnknown;
+            end
+          else Result := bteUnknown;
+        end;
+{---  ----    ----    ----    ----    ----    ----    ----    ----    ----  ---}
+    else
+      Result := bteUnknown;
+    end;
+  end
+else Result := bteUnknown;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideGetEncoding(const Str: UnicodeString; out Reversed: Boolean): TBinTextEncoding;
+var
+  EncByte:  Byte;
+begin
+If Length(Str) > 0 then
+  begin
+    case Str[1] of
+{---  ----    ----    ----    ----    ----    ----    ----    ----    ----  ---}
+      WideEncodingHexadecimal:
+        begin
+          Reversed := False;
+          Result := bteHexadecimal;
+        end;
+{---  ----    ----    ----    ----    ----    ----    ----    ----    ----  ---}
+      WideEncodingHeaderStart:
+        begin
+          If Length(Str) >= HeaderLength then
+            begin
+              If Str[HeaderLength] = AnsiEncodingHeaderEnd then
+                begin
+                  WideDecode_Hexadecimal(Copy(Str,1 + Length(WideEncodingHeaderStart),2),@EncByte,SizeOf(EncByte),False);
+                  Reversed := (EncByte and $80) <> 0;
+                  case (EncByte and $7F) of
+                    ENCNUM_BASE2:     Result := bteBase2;
+                    ENCNUM_BASE8:     Result := bteBase8;
+                    ENCNUM_BASE10:    Result := bteBase10;
+                    ENCNUM_NUMBER:    Result := bteNumber;
+                    ENCNUM_BASE16:    Result := bteBase16;
+                    ENCNUM_BASE32:    Result := bteBase32;
+                    ENCNUM_BASE32HEX: Result := bteBase32Hex;
+                    ENCNUM_BASE64:    Result := bteBase64;
+                    ENCNUM_BASE85:    Result := bteBase85;
+                  else
+                    Result := bteUnknown;
+                  end;
+                end
+              else Result := bteUnknown;
+            end
+          else Result := bteUnknown;
+        end;
+{---  ----    ----    ----    ----    ----    ----    ----    ----    ----  ---}
+    else
+      Result := bteUnknown;
+    end;
+  end
+else Result := bteUnknown;
+end;
+
+{==============================================================================}
+
+Function EncodedLength(Encoding: TBinTextEncoding; DataSize: Integer; Header: Boolean = False; Padding: Boolean = True): Integer;
+begin
+case Encoding of
+  bteBase2:       Result := EncodedLength_Base2(DataSize,Header);
+  bteBase8:       Result := EncodedLength_Base8(DataSize,Header,Padding);
+  bteBase10:      Result := EncodedLength_Base10(DataSize,Header);
+  bteNumber:      Result := EncodedLength_Number(DataSize,Header);
+  bteBase16:      Result := EncodedLength_Base16(DataSize,Header);
+  bteHexadecimal: Result := EncodedLength_Hexadecimal(DataSize,Header);
+  bteBase32:      Result := EncodedLength_Base32Hex(DataSize,Header,Padding);
+  bteBase32Hex:   Result := EncodedLength_Base32(DataSize,Header,Padding);
+  bteBase64:      Result := EncodedLength_Base64(DataSize,Header,Padding);
+  bteBase85:      raise Exception.Create('EncodedLength: Base85 encoding is not supported by this function.');
+else
+  {bteUnknown, ...}
+  raise Exception.CreateFmt('EncodedLength: Unknown encoding (%d).',[Integer(Encoding)]);
+end;
+end;
+
+{==============================================================================}
+
+Function DecodedLength(Encoding: TBinTextEncoding; const Str: String; Header: Boolean = True): Integer;
+begin
+{$IFDEF Unicode}
+Result := WideDecodedLength(Encoding,Str,Header);
+{$ELSE}
+Result := AnsiDecodedLength(Encoding,Str,Header);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecodedLength(Encoding: TBinTextEncoding; const Str: AnsiString; Header: Boolean = True): Integer;
+begin
+case Encoding of
+  bteBase2:       Result := AnsiDecodedLength_Base2(Str,Header);
+  bteBase8:       Result := AnsiDecodedLength_Base8(Str,Header,AnsiPaddingChar_Base8);
+  bteBase10:      Result := AnsiDecodedLength_Base10(Str,Header);
+  bteNumber:      Result := AnsiDecodedLength_Base10(Str,Header);
+  bteBase16:      Result := AnsiDecodedLength_Base16(Str,Header);
+  bteHexadecimal: Result := AnsiDecodedLength_Hexadecimal(Str,Header);
+  bteBase32:      Result := AnsiDecodedLength_Base32(Str,Header,AnsiPaddingChar_Base32);
+  bteBase32Hex:   Result := AnsiDecodedLength_Base32(Str,Header,AnsiPaddingChar_Base32Hex);
+  bteBase64:      Result := AnsiDecodedLength_Base64(Str,Header,AnsiPaddingChar_Base64);
+  bteBase85:      Result := AnsiDecodedLength_Base85(Str,Header,AnsiCompressionChar_Base85);
+else
+  {bteUnknown, ...}
+  raise Exception.CreateFmt('AnsiDecodedLength: Unknown encoding (%d).',[Integer(Encoding)]);
+end;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecodedLength(Encoding: TBinTextEncoding; const Str: UnicodeString; Header: Boolean = True): Integer;
+begin
+case Encoding of
+  bteBase2:       Result := WideDecodedLength_Base2(Str,Header);
+  bteBase8:       Result := WideDecodedLength_Base8(Str,Header,WidePaddingChar_Base8);
+  bteBase10:      Result := WideDecodedLength_Base10(Str,Header);
+  bteNumber:      Result := WideDecodedLength_Base10(Str,Header);
+  bteBase16:      Result := WideDecodedLength_Base16(Str,Header);
+  bteHexadecimal: Result := WideDecodedLength_Hexadecimal(Str,Header);
+  bteBase32:      Result := WideDecodedLength_Base32(Str,Header,WidePaddingChar_Base32);
+  bteBase32Hex:   Result := WideDecodedLength_Base32(Str,Header,WidePaddingChar_Base32Hex);
+  bteBase64:      Result := WideDecodedLength_Base64(Str,Header,WidePaddingChar_Base64);
+  bteBase85:      Result := WideDecodedLength_Base85(Str,Header,WideCompressionChar_Base85);
+else
+  {bteUnknown, ...}
+  raise Exception.CreateFmt('WideDecodedLength: Unknown encoding (%d).',[Integer(Encoding)]);
+end;
+end;
+
+{==============================================================================}
+
+Function Encode(Encoding: TBinTextEncoding; Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): String;
+begin
+{$IFDEF Unicode}
+Result := WideEncode(Encoding,Data,Size,Reversed,Padding);
+{$ELSE}
+Result := AnsiEncode(Encoding,Data,Size,Reversed,Padding);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiEncode(Encoding: TBinTextEncoding; Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): AnsiString;
+
+  Function BuildHeader(EncodingNum: Byte): AnsiString;
+  begin
+    If Reversed then EncodingNum := EncodingNum or $80
+      else EncodingNum := EncodingNum and $7F;
+    Result := AnsiEncodingHeaderStart + AnsiEncode_Hexadecimal(@EncodingNum,SizeOf(EncodingNum),False) + AnsiEncodingHeaderEnd;
+  end;
+
+begin
+case Encoding of
+  bteBase2:       Result := BuildHeader(ENCNUM_BASE2) + AnsiEncode_Base2(Data,Size,Reversed);
+  bteBase8:       Result := BuildHeader(ENCNUM_BASE8) + AnsiEncode_Base8(Data,Size,Reversed,Padding);
+  bteBase10:      Result := BuildHeader(ENCNUM_BASE10) + AnsiEncode_Base10(Data,Size,Reversed);
+  {$MESSAGE 'implement'}
+//bteNumber:      Result := BuildHeader(ENCNUM_NUMBER) + AnsiEncode_Number(Data,Size,Reversed);
+  bteBase16:      Result := BuildHeader(ENCNUM_BASE16) + AnsiEncode_Base16(Data,Size,Reversed);
+  bteHexadecimal: Result := AnsiEncodingHexadecimal + AnsiEncode_Hexadecimal(Data,Size,False);
+  bteBase32:      Result := BuildHeader(ENCNUM_BASE32) + AnsiEncode_Base32(Data,Size,Reversed,Padding);
+  bteBase32Hex:   Result := BuildHeader(ENCNUM_BASE32HEX) + AnsiEncode_Base32(Data,Size,Reversed,Padding);
+  bteBase64:      Result := BuildHeader(ENCNUM_BASE64) + AnsiEncode_Base64(Data,Size,Reversed,Padding);
+  bteBase85:      Result := BuildHeader(ENCNUM_BASE85) + AnsiEncode_Base85(Data,Size,Reversed,True,not Padding);
+else
+  {bteUnknown}
+  raise Exception.CreateFmt('AnsiEncode: Unknown encoding (%d).',[Integer(Encoding)]);
+end;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideEncode(Encoding: TBinTextEncoding; Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): UnicodeString;
+
+  Function BuildHeader(EncodingNum: Byte): UnicodeString;
+  begin
+    If Reversed then EncodingNum := EncodingNum or $80
+      else EncodingNum := EncodingNum and $7F;
+    Result := WideEncodingHeaderStart + WideEncode_Hexadecimal(@EncodingNum,SizeOf(EncodingNum),False) + WideEncodingHeaderEnd;
+  end;
+
+begin
+case Encoding of
+  bteBase2:       Result := BuildHeader(ENCNUM_BASE2) + WideEncode_Base2(Data,Size,Reversed);
+  bteBase8:       Result := BuildHeader(ENCNUM_BASE8) + WideEncode_Base8(Data,Size,Reversed,Padding);
+  bteBase10:      Result := BuildHeader(ENCNUM_BASE10) + WideEncode_Base10(Data,Size,Reversed);
+//bteNumber:      Result := BuildHeader(ENCNUM_NUMBER) + WideEncode_Number(Data,Size,Reversed);
+  bteBase16:      Result := BuildHeader(ENCNUM_BASE16) + WideEncode_Base16(Data,Size,Reversed);
+  bteHexadecimal: Result := WideEncodingHexadecimal + WideEncode_Hexadecimal(Data,Size,False);
+  bteBase32:      Result := BuildHeader(ENCNUM_BASE32) + WideEncode_Base32(Data,Size,Reversed,Padding);
+  bteBase32Hex:   Result := BuildHeader(ENCNUM_BASE32HEX) + WideEncode_Base32(Data,Size,Reversed,Padding);
+  bteBase64:      Result := BuildHeader(ENCNUM_BASE64) + WideEncode_Base64(Data,Size,Reversed,Padding);
+  bteBase85:      Result := BuildHeader(ENCNUM_BASE85) + WideEncode_Base85(Data,Size,Reversed,True,not Padding);
+else
+  {bteUnknown}
+  raise Exception.CreateFmt('WideEncode: Unknown encoding (%d).',[Integer(Encoding)]);
+end;
+end;
+
+{==============================================================================}
+
+Function Decode(const Str: String; out Size: Integer): Pointer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode(Str,Size);
+{$ELSE}
+Result := AnsiDecode(Str,Size);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode(const Str: AnsiString; out Size: Integer): Pointer;
+var
+  Encoding: TBinTextEncoding;
+begin
+Result := AnsiDecode(Str,Size,Encoding);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode(const Str: UnicodeString; out Size: Integer): Pointer;
+var
+  Encoding: TBinTextEncoding;
+begin
+Result := WideDecode(Str,Size,Encoding);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Decode(const Str: String; out Size: Integer; out Encoding: TBinTextEncoding): Pointer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode(Str,Size,Encoding);
+{$ELSE}
+Result := AnsiDecode(Str,Size,Encoding);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode(const Str: AnsiString; out Size: Integer; out Encoding: TBinTextEncoding): Pointer;
+var
+  Reversed: Boolean;
+begin
+Result := AnsiDecode(Str,Size,Encoding,Reversed);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode(const Str: UnicodeString; out Size: Integer; out Encoding: TBinTextEncoding): Pointer;
+var
+  Reversed: Boolean;
+begin
+Result := WideDecode(Str,Size,Encoding,Reversed);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Decode(const Str: String; out Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Pointer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode(Str,Size,Encoding,Reversed);
+{$ELSE}
+Result := AnsiDecode(Str,Size,Encoding,Reversed);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode(const Str: AnsiString; out Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Pointer;
+begin
+Encoding := AnsiGetEncoding(Str,Reversed);
+case Encoding of
+  bteBase2:       Result := AnsiDecode_Base2(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteBase8:       Result := AnsiDecode_Base8(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteBase10:      Result := AnsiDecode_Base10(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  {$MESSAGE 'implement'}
+//bteNumber:      Result := AnsiDecode_Number(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteBase16:      Result := AnsiDecode_Base16(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteHexadecimal: Result := AnsiDecode_Hexadecimal(Copy(Str,1 + Length(AnsiEncodingHexadecimal),Length(Str) - Length(AnsiEncodingHexadecimal)),Size,Reversed);
+  bteBase32:      Result := AnsiDecode_Base32(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteBase32Hex:   Result := AnsiDecode_Base32(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteBase64:      Result := AnsiDecode_Base64(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteBase85:      Result := AnsiDecode_Base85(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+else
+  raise Exception.CreateFmt('AnsiDecode: Unknown encoding (%d).',[Integer(Encoding)]);
+end;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode(const Str: UnicodeString; out Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Pointer;
+begin
+Encoding := WideGetEncoding(Str,Reversed);
+case Encoding of
+  bteBase2:       Result := WideDecode_Base2(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteBase8:       Result := WideDecode_Base8(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteBase10:      Result := WideDecode_Base10(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+//bteNumber:      Result := WideDecode_Number(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteBase16:      Result := WideDecode_Base16(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteHexadecimal: Result := WideDecode_Hexadecimal(Copy(Str,1 + Length(WideEncodingHexadecimal),Length(Str) - Length(WideEncodingHexadecimal)),Size,Reversed);
+  bteBase32:      Result := WideDecode_Base32(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteBase32Hex:   Result := WideDecode_Base32(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteBase64:      Result := WideDecode_Base64(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+  bteBase85:      Result := WideDecode_Base85(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
+else
+  raise Exception.CreateFmt('WideDecode: Unknown encoding (%d).',[Integer(Encoding)]);
+end;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Decode(const Str: String; Ptr: Pointer; Size: Integer): Integer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode(Str,Ptr,Size);
+{$ELSE}
+Result := AnsiDecode(Str,Ptr,Size);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode(const Str: AnsiString; Ptr: Pointer; Size: Integer): Integer;
+var
+  Encoding: TBinTextEncoding;
+begin
+Result := AnsiDecode(Str,Ptr,Size,Encoding);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode(const Str: UnicodeString; Ptr: Pointer; Size: Integer): Integer;
+var
+  Encoding: TBinTextEncoding;
+begin
+Result := WideDecode(Str,Ptr,Size,Encoding);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Decode(const Str: String; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding): Integer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode(Str,Ptr,Size,Encoding);
+{$ELSE}
+Result := AnsiDecode(Str,Ptr,Size,Encoding);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode(const Str: AnsiString; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding): Integer;
+var
+  Reversed: Boolean;
+begin
+Result := AnsiDecode(Str,Ptr,Size,Encoding,Reversed);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode(const Str: UnicodeString; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding): Integer;
+var
+  Reversed: Boolean;
+begin
+Result := WideDecode(Str,Ptr,Size,Encoding,Reversed);
+end;
+
+{------------------------------------------------------------------------------}
+
+Function Decode(const Str: String; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Integer;
+begin
+{$IFDEF Unicode}
+Result := WideDecode(Str,Ptr,Size,Encoding,Reversed);
+{$ELSE}
+Result := AnsiDecode(Str,Ptr,Size,Encoding,Reversed);
+{$ENDIF}
+end;
+
+{------------------------------------------------------------------------------}
+
+Function AnsiDecode(const Str: AnsiString; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Integer;
+begin
+Encoding := AnsiGetEncoding(Str,Reversed);
+case Encoding of
+  bteBase2:       Result := AnsiDecode_Base2(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteBase8:       Result := AnsiDecode_Base8(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteBase10:      Result := AnsiDecode_Base10(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  {$MESSAGE 'implement'}  
+//bteNumber:      Result := AnsiDecode_Number(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteBase16:      Result := AnsiDecode_Base16(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteHexadecimal: Result := AnsiDecode_Base16(Copy(Str,1 + Length(AnsiEncodingHexadecimal),Length(Str) - Length(AnsiEncodingHexadecimal)),Ptr,Size,Reversed);
+  bteBase32:      Result := AnsiDecode_Base32(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteBase32Hex:   Result := AnsiDecode_Base32(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteBase64:      Result := AnsiDecode_Base64(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteBase85:      Result := AnsiDecode_Base85(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+else
+  raise Exception.CreateFmt('AnsiDecode: Unknown encoding (%d).',[Integer(Encoding)]);
+end;
+end;
+
+{------------------------------------------------------------------------------}
+
+Function WideDecode(const Str: UnicodeString; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Integer;
+begin
+Encoding := WideGetEncoding(Str,Reversed);
+case Encoding of
+  bteBase2:       Result := WideDecode_Base2(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteBase8:       Result := WideDecode_Base8(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteBase10:      Result := WideDecode_Base10(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+//bteNumber:      Result := WideDecode_Number(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteBase16:      Result := WideDecode_Base16(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteHexadecimal: Result := WideDecode_Base16(Copy(Str,1 + Length(WideEncodingHexadecimal),Length(Str) - Length(WideEncodingHexadecimal)),Ptr,Size,Reversed);
+  bteBase32:      Result := WideDecode_Base32(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteBase32Hex:   Result := WideDecode_Base32(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteBase64:      Result := WideDecode_Base64(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+  bteBase85:      Result := WideDecode_Base85(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
+else
+  raise Exception.CreateFmt('WideDecode: Unknown encoding (%d).',[Integer(Encoding)]);
+end;
+end;
 {==============================================================================}
 {------------------------------------------------------------------------------}
 {    Functions calculating length of encoded text from size of data that has   }
@@ -574,7 +1109,7 @@ end;
 Function EncodedLength_Hexadecimal(DataSize: Integer; Header: Boolean = False): Integer;
 begin
 Result := DataSize * 2;
-If Header then Result := Result + Length(EncodingHexadecimal);
+If Header then Result := Result + Length(AnsiEncodingHexadecimal);
 If Result < 0 then Result := 0;
 end;
 
@@ -607,7 +1142,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function EncodedLength_Base85(Data: Pointer; DataSize: Integer; Reversed: Boolean; Header: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): Integer;
+Function EncodedLength_Base85(Data: Pointer; DataSize: Integer; Reversed: Boolean; Header: Boolean = False; Compression: Boolean = True; Trim: Boolean = True): Integer;
 
   Function CountCompressible(Ptr: PLongWord): Integer;
   var
@@ -710,7 +1245,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecodedLength_Base8(const Str: UnicodeString; Header: Boolean; PaddingChar: WideChar): Integer;
+Function WideDecodedLength_Base8(const Str: UnicodeString; Header: Boolean; PaddingChar: UnicodeChar): Integer;
 begin
 If Header then Result := Floor((((Length(Str) - HeaderLength) - WideCountPadding(Str,PaddingChar)) / 8) * 3)
   else Result := Floor(((Length(Str) - WideCountPadding(Str,PaddingChar)) / 8) * 3);
@@ -815,7 +1350,7 @@ end;
 
 Function AnsiDecodedLength_Hexadecimal(const Str: AnsiString; Header: Boolean = False): Integer;
 begin
-If Header then Result := (Length(Str) - Length(EncodingHexadecimal)) div 2
+If Header then Result := (Length(Str) - Length(AnsiEncodingHexadecimal)) div 2
   else Result := Length(Str) div 2;
 If Result < 0 then Result := 0;
 end;
@@ -824,7 +1359,7 @@ end;
 
 Function WideDecodedLength_Hexadecimal(const Str: UnicodeString; Header: Boolean = False): Integer;
 begin
-If Header then Result := (Length(Str) - Length(EncodingHexadecimal)) div 2
+If Header then Result := (Length(Str) - Length(WideEncodingHexadecimal)) div 2
   else Result := Length(Str) div 2;
 If Result < 0 then Result := 0;
 end;
@@ -1176,7 +1711,7 @@ SetLength(Result,EncodedLength_Base8(Size,False,Padding));
 Remainder := 0;
 RemainderBits := 0;
 ResultPosition := 1;
-For i := 0 to Pred(Size) do
+For i := 1 to Size do
   begin
     Buffer := PByte(Data)^;
     case RemainderBits of
@@ -1232,7 +1767,7 @@ SetLength(Result,EncodedLength_Base8(Size,False,Padding));
 Remainder := 0;
 RemainderBits := 0;
 ResultPosition := 1;
-For i := 0 to Pred(Size) do
+For i := 1 to Size do
   begin
     Buffer := PByte(Data)^;
     case RemainderBits of
@@ -1495,7 +2030,7 @@ SetLength(Result,EncodedLength_Base32(Size,False,Padding));
 Remainder := 0;
 RemainderBits := 0;
 ResultPosition := 1;
-For i := 0 to Pred(Size) do
+For i := 1 to Size do
   begin
     Buffer := PByte(Data)^;
     case RemainderBits of
@@ -1562,7 +2097,7 @@ SetLength(Result,EncodedLength_Base32(Size,False,Padding));
 Remainder := 0;
 RemainderBits := 0;
 ResultPosition := 1;
-For i := 0 to Pred(Size) do
+For i := 1 to Size do
   begin
     Buffer := PByte(Data)^;
     case RemainderBits of
@@ -1691,7 +2226,7 @@ SetLength(Result,EncodedLength_Base64(Size,False,Padding));
 Remainder := 0;
 RemainderBits := 0;
 ResultPosition := 1;
-For i := 0 to Pred(Size) do
+For i := 1 to Size do
   begin
     Buffer := PByte(Data)^;
     case RemainderBits of
@@ -1743,7 +2278,7 @@ SetLength(Result,EncodedLength_Base64(Size,False,Padding));
 Remainder := 0;
 RemainderBits := 0;
 ResultPosition := 1;
-For i := 0 to Pred(Size) do
+For i := 1 to Size do
   begin
     Buffer := PByte(Data)^;
     case RemainderBits of
@@ -1782,7 +2317,7 @@ end;
 
 {==============================================================================}
 
-Function Encode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): String;
+Function Encode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True): String;
 begin
 {$IFDEF Unicode}
 Result := WideEncode_Base85(Data,Size,Reversed,Compression,Trim);
@@ -1793,14 +2328,14 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): AnsiString;
+Function AnsiEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True): AnsiString;
 begin
 Result := AnsiEncode_Base85(Data,Size,Reversed,Compression,Trim,AnsiEncodingTable_Base85,AnsiCompressionChar_Base85);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = True): UnicodeString;
+Function WideEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True): UnicodeString;
 begin
 Result := WideEncode_Base85(Data,Size,Reversed,Compression,Trim,WideEncodingTable_Base85,WideCompressionChar_Base85);
 end;
@@ -1981,7 +2516,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base2(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of WideChar): Pointer;
+Function WideDecode_Base2(const Str: UnicodeString; out Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar): Pointer;
 var
   ResultSize: Integer;
 begin
@@ -2032,7 +2567,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base2(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of WideChar): Integer;
+Function WideDecode_Base2(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar): Integer;
 var
   Buffer: Byte;
   i,j:    Integer;
@@ -2178,7 +2713,7 @@ ResolveDataPointer(Ptr,Reversed,Size);
 Remainder := 0;
 RemainderBits := 0;
 StrPosition := 1;
-For i := 0 to Pred(Result) do
+For i := 1 to Result do
   begin
     case RemainderBits of
       0:  begin
@@ -2230,7 +2765,7 @@ ResolveDataPointer(Ptr,Reversed,Size);
 Remainder := 0;
 RemainderBits := 0;
 StrPosition := 1;
-For i := 0 to Pred(Result) do
+For i := 1 to Result do
   begin
     case RemainderBits of
       0:  begin
@@ -2765,7 +3300,7 @@ ResolveDataPointer(Ptr,Reversed,Size);
 Remainder := 0;
 RemainderBits := 0;
 StrPosition := 1;
-For i := 0 to Pred(Result) do
+For i := 1 to Result do
   begin
     case RemainderBits of
       0:  begin
@@ -2829,7 +3364,7 @@ ResolveDataPointer(Ptr,Reversed,Size);
 Remainder := 0;
 RemainderBits := 0;
 StrPosition := 1;
-For i := 0 to Pred(Result) do
+For i := 1 to Result do
   begin
     case RemainderBits of
       0:  begin
@@ -3054,7 +3589,7 @@ ResolveDataPointer(Ptr,Reversed,Size);
 Remainder := 0;
 RemainderBits := 0;
 StrPosition := 1;
-For i := 0 to Pred(Result) do
+For i := 1 to Result do
   begin
     case RemainderBits of
       0:  begin
@@ -3101,7 +3636,7 @@ ResolveDataPointer(Ptr,Reversed,Size);
 Remainder := 0;
 RemainderBits := 0;
 StrPosition := 1;
-For i := 0 to Pred(Result) do
+For i := 1 to Result do
   begin
     case RemainderBits of
       0:  begin
