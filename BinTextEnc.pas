@@ -6,6 +6,9 @@
 
   Version 1.0
 
+  todo:
+    - add ignoring of whitespaces in base85 decoding
+
 ===============================================================================}
 unit BinTextEnc;
 
@@ -495,7 +498,6 @@ case Encoding of
   bteBase64:      Result := ENCNUM_BASE64;
   bteBase85:      Result := ENCNUM_BASE85;
 else
-  {bteUnknown}
   raise EUnknownEncoding.CreateFmt('GetEncodingNumber: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
@@ -523,7 +525,7 @@ end;
 procedure DecodeCheckSize(Size, Required, Base: Integer; MaxError: Integer = 0);
 begin
 If Size < (Required - MaxError) then
-  raise EAllocationError.CreateFmt('Decoding[base%d]: Output buffer too small (%d, required %d).',[Base,Size,Required]);
+  raise EAllocationError.CreateFmt('DecodeCheckSize[base%d]: Output buffer too small (%d, required %d).',[Base,Size,Required]);
 end;
 
 {------------------------------------------------------------------------------}
@@ -786,7 +788,6 @@ case Encoding of
   bteBase64:      Result := EncodedLength_Base64(DataSize,Header,Padding);
   bteBase85:      raise EUnsupportedEncoding.Create('EncodedLength: Base85 encoding is not supported by this function.');
 else
-  {bteUnknown, ...}
   raise EUnknownEncoding.CreateFmt('EncodedLength: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
@@ -818,7 +819,6 @@ case Encoding of
   bteBase64:      Result := AnsiDecodedLength_Base64(Str,Header,AnsiPaddingChar_Base64);
   bteBase85:      Result := AnsiDecodedLength_Base85(Str,Header,AnsiCompressionChar_Base85);
 else
-  {bteUnknown, ...}
   raise EUnknownEncoding.CreateFmt('AnsiDecodedLength: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
@@ -839,7 +839,6 @@ case Encoding of
   bteBase64:      Result := WideDecodedLength_Base64(Str,Header,WidePaddingChar_Base64);
   bteBase85:      Result := WideDecodedLength_Base85(Str,Header,WideCompressionChar_Base85);
 else
-  {bteUnknown, ...}
   raise EUnknownEncoding.CreateFmt('WideDecodedLength: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
@@ -872,7 +871,6 @@ case Encoding of
   bteBase64:      Result := AnsiBuildHeader(Encoding,Reversed) + AnsiEncode_Base64(Data,Size,Reversed,Padding);
   bteBase85:      Result := AnsiBuildHeader(Encoding,Reversed) + AnsiEncode_Base85(Data,Size,Reversed,True,not Padding);
 else
-  {bteUnknown}
   raise EUnknownEncoding.CreateFmt('AnsiEncode: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
@@ -893,7 +891,6 @@ case Encoding of
   bteBase64:      Result := WideBuildHeader(Encoding,Reversed) + WideEncode_Base64(Data,Size,Reversed,Padding);
   bteBase85:      Result := WideBuildHeader(Encoding,Reversed) + WideEncode_Base85(Data,Size,Reversed,True,not Padding);
 else
-  {bteUnknown}
   raise EUnknownEncoding.CreateFmt('WideEncode: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
@@ -2425,8 +2422,8 @@ var
   i,j:            Integer;
   ResultPosition: Integer;
 begin
-ResolveDataPointer(Data,Reversed,Size,4);
 SetLength(Result,EncodedLength_Base85(Data,Size,Reversed,False,Compression,Trim));
+ResolveDataPointer(Data,Reversed,Size,4);
 ResultPosition := 1;
 For i := 1 to Ceil(Size / 4) do
   begin
@@ -2447,7 +2444,7 @@ For i := 1 to Ceil(Size / 4) do
       end
     else
       begin
-        For j := 1 to Min(5,Length(Result) - ((i - 1) * 5)) do
+        For j := 1 to Min(5,Length(Result) - ResultPosition + 1) do
           begin
             Result[ResultPosition + j - 1] := EncodingTable[Buffer div Coefficients_Base85[j]];
             Buffer := Buffer mod Coefficients_Base85[j];            
@@ -2466,8 +2463,8 @@ var
   i,j:            Integer;
   ResultPosition: Integer;
 begin
-ResolveDataPointer(Data,Reversed,Size,4);
 SetLength(Result,EncodedLength_Base85(Data,Size,Reversed,False,Compression,Trim));
+ResolveDataPointer(Data,Reversed,Size,4);
 ResultPosition := 1;
 For i := 1 to Ceil(Size / 4) do
   begin
@@ -2488,7 +2485,7 @@ For i := 1 to Ceil(Size / 4) do
       end
     else
       begin
-        For j := 1 to Min(5,Length(Result) - ((i - 1) * 5)) do
+        For j := 1 to Min(5,Length(Result) - ResultPosition + 1) do
           begin
             Result[ResultPosition + j - 1] := EncodingTable[Buffer div Coefficients_Base85[j]];
             Buffer := Buffer mod Coefficients_Base85[j];            
@@ -3855,6 +3852,7 @@ Function AnsiDecode_Base85(const Str: AnsiString; Ptr: Pointer; Size: Integer; R
 var
   i,j:          Integer;
   Buffer:       LongWord;
+  Buffer64:     Int64;
   StrPosition:  Integer;
 begin
 Result := AnsiDecodedLength_Base85(Str,False,CompressionChar);
@@ -3871,12 +3869,15 @@ For i := 1 to Ceil(Result / 4) do
       end
     else
       begin
-        Buffer := 0;
+        Buffer64 := 0;
         For j := 0 to 4 do
           If (StrPosition + j) <= Length(Str) then
-            Buffer := Buffer + (AnsiTableIndex(Str[StrPosition + j],DecodingTable,85) * Coefficients_Base85[j + 1])
+            Buffer64 := Buffer64 + (AnsiTableIndex(Str[StrPosition + j],DecodingTable,85) * Coefficients_Base85[j + 1])
           else
-            Buffer := Buffer + (84 * Coefficients_Base85[j + 1]);
+            Buffer64 := Buffer64 + (84 * Coefficients_Base85[j + 1]);
+        If Buffer64 > High(LongWord) then
+          raise EDecodingError.CreateFmt('AnsiDecode_Base85: Invalid value decoded (%d).',[Buffer64]);
+        Buffer := Buffer64;
         Inc(StrPosition,5);
       end;
     If not Reversed then SwapByteOrder(Buffer);
@@ -3898,6 +3899,7 @@ Function WideDecode_Base85(const Str: UnicodeString; Ptr: Pointer; Size: Integer
 var
   i,j:          Integer;
   Buffer:       LongWord;
+  Buffer64:     Int64;
   StrPosition:  Integer;
 begin
 Result := WideDecodedLength_Base85(Str,False,CompressionChar);
@@ -3914,12 +3916,15 @@ For i := 1 to Ceil(Result / 4) do
       end
     else
       begin
-        Buffer := 0;
+        Buffer64 := 0;
         For j := 0 to 4 do
           If (StrPosition + j) <= Length(Str) then
-            Buffer := Buffer + (WideTableIndex(Str[StrPosition + j],DecodingTable,85) * Coefficients_Base85[j + 1])
+            Buffer64 := Buffer64 + (WideTableIndex(Str[StrPosition + j],DecodingTable,85) * Coefficients_Base85[j + 1])
           else
-            Buffer := Buffer + (84 * Coefficients_Base85[j + 1]);
+            Buffer64 := Buffer64 + (84 * Coefficients_Base85[j + 1]);
+        If Buffer64 > High(LongWord) then
+          raise EDecodingError.CreateFmt('WideDecode_Base85: Invalid value decoded (%d).',[Buffer64]);
+        Buffer := Buffer64;   
         Inc(StrPosition,5);
       end;
     If not Reversed then SwapByteOrder(Buffer);
