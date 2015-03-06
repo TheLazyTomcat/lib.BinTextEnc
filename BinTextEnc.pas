@@ -9,6 +9,14 @@
   todo:
     - add ignoring of whitespaces in base85 decoding
 
+  Notes:
+    - Do not call EncodedLength function with Base85 encoding.
+    - Hexadecimal encoding is always forward (ie. not reversed) when executed by
+      a universal function, irrespective of selected setting.
+    - Base16, Base32 nad Base64 encodings should be compliant with RFC 4648.
+    - Base85 encoding is by-default using Z85 alphabet with undescore ("_", #95)
+      as an all-zero-compression letter, but Ascii85 alphabet is provided too.  
+
 ===============================================================================}
 unit BinTextEnc;
 
@@ -29,9 +37,8 @@ type
   UnicodeString = WideString;
 {$IFEND}
 
-  TBinTextEncoding = (bteUnknown,bteBase2,bteBase8,bteBase10,bteNumber,
-                      bteBase16,bteHexadecimal,bteBase32,bteBase32Hex,
-                      bteBase64,bteBase85);
+  TBinTextEncoding = (bteUnknown,bteBase2,bteBase8,bteBase10,bteBase16,
+                      bteHexadecimal,bteBase32,bteBase32Hex,bteBase64,bteBase85);
 
   EBinTextEncError     = class(Exception);
   EUnknownEncoding     = class(EBinTextEncError);
@@ -70,11 +77,6 @@ const
   WideEncodingTable_Base10: Array[0..9] of UnicodeChar =
     ('0','1','2','3','4','5','6','7','8','9');
 
-  AnsiEncodingTable_Number: Array[0..9] of AnsiChar =
-    ('0','1','2','3','4','5','6','7','8','9');
-  WideEncodingTable_Number: Array[0..9] of UnicodeChar =
-    ('0','1','2','3','4','5','6','7','8','9');
-
   AnsiEncodingTable_Base16: Array[0..15] of AnsiChar =
     ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
   WideEncodingTable_Base16: Array[0..15] of UnicodeChar =
@@ -111,19 +113,37 @@ const
      'w','x','y','z','0','1','2','3','4','5','6','7','8','9','+','/');
 
   AnsiEncodingTable_Base85: Array[0..84] of AnsiChar =
-    ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F',
-     'G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V',
-     'W','X','Y','Z','a','b','c','d','e','f','g','h','i','j','k','l',
-     'm','n','o','p','q','r','s','t','u','v','w','x','y','z','.','-',
+    ('0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f',
+     'g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v',
+     'w','x','y','z','A','B','C','D','E','F','G','H','I','J','K','L',
+     'M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','.','-',
      ':','+','=','^','!','/','*','?','&','<','>','(',')','[',']','{',
      '}','@','%','$','#');
   WideEncodingTable_Base85: Array[0..84] of UnicodeChar =
-    ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F',
-     'G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V',
-     'W','X','Y','Z','a','b','c','d','e','f','g','h','i','j','k','l',
-     'm','n','o','p','q','r','s','t','u','v','w','x','y','z','.','-',
+    ('0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f',
+     'g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v',
+     'w','x','y','z','A','B','C','D','E','F','G','H','I','J','K','L',
+     'M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','.','-',
      ':','+','=','^','!','/','*','?','&','<','>','(',')','[',']','{',
      '}','@','%','$','#');
+
+  AnsiCompressionChar_Ascii85: AnsiChar    = 'z';
+  WideCompressionChar_Ascii85: UnicodeChar = 'z';
+
+  AnsiEncodingTable_Ascii85: Array[0..84] of AnsiChar =
+    ('!','"','#','$','%','&','''','(',')','*','+',',','-','.','/','0',
+     '1','2','3','4','5','6','7','8','9',':',';','<','=','>','?','@',
+     'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P',
+     'Q','R','S','T','U','V','W','X','Y','Z','[','\',']','^','_','`',
+     'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p',
+     'q','r','s','t','u');
+  WideEncodingTable_Ascii85: Array[0..84] of UnicodeChar =
+    ('!','"','#','$','%','&','''','(',')','*','+',',','-','.','/','0',
+     '1','2','3','4','5','6','7','8','9',':',';','<','=','>','?','@',
+     'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P',
+     'Q','R','S','T','U','V','W','X','Y','Z','[','\',']','^','_','`',
+     'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p',
+     'q','r','s','t','u');
 
 {------------------------------------------------------------------------------}
 
@@ -174,7 +194,6 @@ Function WideDecode(const Str: UnicodeString; Ptr: Pointer; Size: Integer; out E
 Function EncodedLength_Base2(DataSize: Integer; Header: Boolean = False): Integer;
 Function EncodedLength_Base8(DataSize: Integer; Header: Boolean = False; Padding: Boolean = True): Integer;
 Function EncodedLength_Base10(DataSize: Integer; Header: Boolean = False): Integer;
-Function EncodedLength_Number(DataSize: Integer; Header: Boolean = False): Integer;
 Function EncodedLength_Base16(DataSize: Integer; Header: Boolean = False): Integer;
 Function EncodedLength_Hexadecimal(DataSize: Integer; Header: Boolean = False): Integer;
 Function EncodedLength_Base32(DataSize: Integer; Header: Boolean = False; Padding: Boolean = True): Integer;
@@ -198,10 +217,6 @@ Function WideDecodedLength_Base8(const Str: UnicodeString; Header: Boolean; Padd
 Function DecodedLength_Base10(const Str: String; Header: Boolean = False): Integer;
 Function AnsiDecodedLength_Base10(const Str: AnsiString; Header: Boolean = False): Integer;
 Function WideDecodedLength_Base10(const Str: UnicodeString; Header: Boolean = False): Integer;
-
-Function DecodedLength_Number(const Str: String; Header: Boolean = False): Integer;
-Function AnsiDecodedLength_Number(const Str: AnsiString; Header: Boolean = False): Integer;
-Function WideDecodedLength_Number(const Str: UnicodeString; Header: Boolean = False): Integer;
 
 Function DecodedLength_Base16(const Str: String; Header: Boolean = False): Integer;
 Function AnsiDecodedLength_Base16(const Str: AnsiString; Header: Boolean = False): Integer;
@@ -463,12 +478,12 @@ const
   WideEncodingHeaderEnd   = UnicodeChar(':');
 
   HeaderLength = Length(AnsiEncodingHeaderStart + '00' + AnsiEncodingHeaderEnd);
+  
   HexadecimalHeaderLength = Length(AnsiEncodingHexadecimal);
 
   ENCNUM_BASE2     = 2;
   ENCNUM_BASE8     = 8;
   ENCNUM_BASE10    = 10;
-  ENCNUM_NUMBER    = 11;
   ENCNUM_BASE16    = 16;
   ENCNUM_BASE32    = 32;
   ENCNUM_BASE32HEX = 33;
@@ -490,7 +505,6 @@ case Encoding of
   bteBase2:       Result := ENCNUM_BASE2;
   bteBase8:       Result := ENCNUM_BASE8;
   bteBase10:      Result := ENCNUM_BASE10;
-  bteNumber:      Result := ENCNUM_NUMBER;
   bteBase16:      Result := ENCNUM_BASE16;
   bteHexadecimal: raise EUnsupportedEncoding.Create('GetEncodingNumber: Hexadecimal encoding is not supported by this function.');
   bteBase32:      Result := ENCNUM_BASE32;
@@ -700,7 +714,6 @@ If Length(Str) > 0 then
                     ENCNUM_BASE2:     Result := bteBase2;
                     ENCNUM_BASE8:     Result := bteBase8;
                     ENCNUM_BASE10:    Result := bteBase10;
-                    ENCNUM_NUMBER:    Result := bteNumber;
                     ENCNUM_BASE16:    Result := bteBase16;
                     ENCNUM_BASE32:    Result := bteBase32;
                     ENCNUM_BASE32HEX: Result := bteBase32Hex;
@@ -750,7 +763,6 @@ If Length(Str) > 0 then
                     ENCNUM_BASE2:     Result := bteBase2;
                     ENCNUM_BASE8:     Result := bteBase8;
                     ENCNUM_BASE10:    Result := bteBase10;
-                    ENCNUM_NUMBER:    Result := bteNumber;
                     ENCNUM_BASE16:    Result := bteBase16;
                     ENCNUM_BASE32:    Result := bteBase32;
                     ENCNUM_BASE32HEX: Result := bteBase32Hex;
@@ -780,7 +792,6 @@ case Encoding of
   bteBase2:       Result := EncodedLength_Base2(DataSize,Header);
   bteBase8:       Result := EncodedLength_Base8(DataSize,Header,Padding);
   bteBase10:      Result := EncodedLength_Base10(DataSize,Header);
-  bteNumber:      Result := EncodedLength_Number(DataSize,Header);
   bteBase16:      Result := EncodedLength_Base16(DataSize,Header);
   bteHexadecimal: Result := EncodedLength_Hexadecimal(DataSize,Header);
   bteBase32:      Result := EncodedLength_Base32Hex(DataSize,Header,Padding);
@@ -811,7 +822,6 @@ case Encoding of
   bteBase2:       Result := AnsiDecodedLength_Base2(Str,Header);
   bteBase8:       Result := AnsiDecodedLength_Base8(Str,Header,AnsiPaddingChar_Base8);
   bteBase10:      Result := AnsiDecodedLength_Base10(Str,Header);
-  bteNumber:      Result := AnsiDecodedLength_Base10(Str,Header);
   bteBase16:      Result := AnsiDecodedLength_Base16(Str,Header);
   bteHexadecimal: Result := AnsiDecodedLength_Hexadecimal(Str,Header);
   bteBase32:      Result := AnsiDecodedLength_Base32(Str,Header,AnsiPaddingChar_Base32);
@@ -831,7 +841,6 @@ case Encoding of
   bteBase2:       Result := WideDecodedLength_Base2(Str,Header);
   bteBase8:       Result := WideDecodedLength_Base8(Str,Header,WidePaddingChar_Base8);
   bteBase10:      Result := WideDecodedLength_Base10(Str,Header);
-  bteNumber:      Result := WideDecodedLength_Base10(Str,Header);
   bteBase16:      Result := WideDecodedLength_Base16(Str,Header);
   bteHexadecimal: Result := WideDecodedLength_Hexadecimal(Str,Header);
   bteBase32:      Result := WideDecodedLength_Base32(Str,Header,WidePaddingChar_Base32);
@@ -862,8 +871,6 @@ case Encoding of
   bteBase2:       Result := AnsiBuildHeader(Encoding,Reversed) + AnsiEncode_Base2(Data,Size,Reversed);
   bteBase8:       Result := AnsiBuildHeader(Encoding,Reversed) + AnsiEncode_Base8(Data,Size,Reversed,Padding);
   bteBase10:      Result := AnsiBuildHeader(Encoding,Reversed) + AnsiEncode_Base10(Data,Size,Reversed);
-  {$MESSAGE 'implement'}
-//bteNumber:      Result := AnsiBuildHeader(Encoding,Reversed) + AnsiEncode_Number(Data,Size,Reversed);
   bteBase16:      Result := AnsiBuildHeader(Encoding,Reversed) + AnsiEncode_Base16(Data,Size,Reversed);
   bteHexadecimal: Result := AnsiBuildHeader(Encoding,Reversed) + AnsiEncode_Hexadecimal(Data,Size,False);
   bteBase32:      Result := AnsiBuildHeader(Encoding,Reversed) + AnsiEncode_Base32(Data,Size,Reversed,Padding);
@@ -883,7 +890,6 @@ case Encoding of
   bteBase2:       Result := WideBuildHeader(Encoding,Reversed) + WideEncode_Base2(Data,Size,Reversed);
   bteBase8:       Result := WideBuildHeader(Encoding,Reversed) + WideEncode_Base8(Data,Size,Reversed,Padding);
   bteBase10:      Result := WideBuildHeader(Encoding,Reversed) + WideEncode_Base10(Data,Size,Reversed);
-//bteNumber:      Result := WideBuildHeader(Encoding,Reversed) + WideEncode_Number(Data,Size,Reversed);
   bteBase16:      Result := WideBuildHeader(Encoding,Reversed) + WideEncode_Base16(Data,Size,Reversed);
   bteHexadecimal: Result := WideBuildHeader(Encoding,Reversed) + WideEncode_Hexadecimal(Data,Size,False);
   bteBase32:      Result := WideBuildHeader(Encoding,Reversed) + WideEncode_Base32(Data,Size,Reversed,Padding);
@@ -973,8 +979,6 @@ case Encoding of
   bteBase2:       Result := AnsiDecode_Base2(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
   bteBase8:       Result := AnsiDecode_Base8(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
   bteBase10:      Result := AnsiDecode_Base10(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
-  {$MESSAGE 'implement'}
-//bteNumber:      Result := AnsiDecode_Number(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
   bteBase16:      Result := AnsiDecode_Base16(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
   bteHexadecimal: Result := AnsiDecode_Hexadecimal(Copy(Str,HexadecimalHeaderLength + 1,Length(Str) - HexadecimalHeaderLength),Size,Reversed);
   bteBase32:      Result := AnsiDecode_Base32(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
@@ -995,7 +999,6 @@ case Encoding of
   bteBase2:       Result := WideDecode_Base2(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
   bteBase8:       Result := WideDecode_Base8(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
   bteBase10:      Result := WideDecode_Base10(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
-//bteNumber:      Result := WideDecode_Number(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
   bteBase16:      Result := WideDecode_Base16(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
   bteHexadecimal: Result := WideDecode_Hexadecimal(Copy(Str,HexadecimalHeaderLength + 1,Length(Str) - HexadecimalHeaderLength),Size,Reversed);
   bteBase32:      Result := WideDecode_Base32(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Size,Reversed);
@@ -1085,8 +1088,6 @@ case Encoding of
   bteBase2:       Result := AnsiDecode_Base2(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
   bteBase8:       Result := AnsiDecode_Base8(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
   bteBase10:      Result := AnsiDecode_Base10(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
-  {$MESSAGE 'implement'}  
-//bteNumber:      Result := AnsiDecode_Number(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
   bteBase16:      Result := AnsiDecode_Base16(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
   bteHexadecimal: Result := AnsiDecode_Base16(Copy(Str,HexadecimalHeaderLength + 1,Length(Str) - HexadecimalHeaderLength),Ptr,Size,Reversed);
   bteBase32:      Result := AnsiDecode_Base32(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
@@ -1107,7 +1108,6 @@ case Encoding of
   bteBase2:       Result := WideDecode_Base2(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
   bteBase8:       Result := WideDecode_Base8(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
   bteBase10:      Result := WideDecode_Base10(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
-//bteNumber:      Result := WideDecode_Number(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
   bteBase16:      Result := WideDecode_Base16(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
   bteHexadecimal: Result := WideDecode_Base16(Copy(Str,HexadecimalHeaderLength + 1,Length(Str) - HexadecimalHeaderLength),Ptr,Size,Reversed);
   bteBase32:      Result := WideDecode_Base32(Copy(Str,HeaderLength + 1,Length(Str) - HeaderLength),Ptr,Size,Reversed);
@@ -1149,13 +1149,6 @@ begin
 Result := DataSize * 3;
 If Header then Result := Result + HeaderLength;
 If Result < 0 then Result := 0;
-end;
-
-{------------------------------------------------------------------------------}
-
-Function EncodedLength_Number(DataSize: Integer; Header: Boolean = False): Integer;
-begin
-Result := EncodedLength_Base10(DataSize,Header);
 end;
 
 {------------------------------------------------------------------------------}
@@ -1342,31 +1335,6 @@ begin
 If Header then Result := (Length(Str) - HeaderLength) div 3
   else Result := Length(Str) div 3;
 If Result < 0 then Result := 0;
-end;
-
-{------------------------------------------------------------------------------}
-
-Function DecodedLength_Number(const Str: String; Header: Boolean = False): Integer;
-begin
-{$IFDEF Unicode}
-Result := WideDecodedLength_Number(Str,Header);
-{$ELSE}
-Result := AnsiDecodedLength_Number(Str,Header);
-{$ENDIF}
-end;
-
-{------------------------------------------------------------------------------}
-
-Function AnsiDecodedLength_Number(const Str: AnsiString; Header: Boolean = False): Integer;
-begin
-Result := AnsiDecodedLength_Base10(Str,Header);
-end;
-
-{------------------------------------------------------------------------------}
-
-Function WideDecodedLength_Number(const Str: UnicodeString; Header: Boolean = False): Integer;
-begin
-Result := WideDecodedLength_Base10(Str,Header);
 end;
 
 {------------------------------------------------------------------------------}
