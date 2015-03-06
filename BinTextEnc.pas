@@ -521,7 +521,7 @@ end;
 procedure ResolveDataPointer(var Ptr: Pointer; Reversed: Boolean; Size: LongWord; EndOffset: LongWord = 1);
 begin
 If Reversed then
-  Ptr := Pointer(PtrUInt(Ptr) + Size - EndOffset)
+  {%H-}Ptr := Pointer(PtrUInt(Ptr) + Size - EndOffset);
 end;
 
 {------------------------------------------------------------------------------}
@@ -529,9 +529,9 @@ end;
 procedure AdvanceDataPointer(var Ptr: Pointer; Reversed: Boolean; Step: Byte = 1);
 begin
 If Reversed then
-  Ptr := Pointer(PtrUInt(Ptr) - Step)
+  {%H-}Ptr := Pointer(PtrUInt(Ptr) - Step)
 else
-  Ptr := Pointer(PtrUInt(Ptr) + Step);
+  {%H-}Ptr := Pointer(PtrUInt(Ptr) + Step);
 end;
 
 {------------------------------------------------------------------------------}
@@ -608,13 +608,14 @@ end;
 
 {------------------------------------------------------------------------------}
 
-procedure SwapByteOrder(var Value: LongWord); register;
+procedure SwapByteOrder(var Value: LongWord); register; {$IFNDEF PurePascal}assembler;{$ENDIF}
 {$IFDEF PurePascal}
 begin
 Value := (Value and $000000FF shl 24) or (Value and $0000FF00 shl 8) or
          (Value and $00FF0000 shr 8) or (Value and $FF000000 shr 24);
 end;
 {$ELSE}
+{$IFDEF FPC}{$ASMMODE Intel}{$ENDIF}
 asm
   MOV   EDX, [Value]
   BSWAP EDX
@@ -2399,7 +2400,7 @@ For i := 1 to Ceil(Size / 4) do
       begin
         Buffer := 0;
         If Reversed then
-          Move(Pointer(PtrUInt(Data) - PtrUInt(Size and 3) + 4)^,Pointer(PtrUInt(@Buffer) - PtrUInt(Size and 3) + 4)^,Size and 3)
+          Move({%H-}Pointer(PtrUInt(Data) - PtrUInt(Size and 3) + 4)^,{%H-}Pointer(PtrUInt(@Buffer) - PtrUInt(Size and 3) + 4)^,Size and 3)
         else
           Move(Data^,Buffer,Size and 3);
       end
@@ -2440,7 +2441,7 @@ For i := 1 to Ceil(Size / 4) do
       begin
         Buffer := 0;
         If Reversed then
-          Move(Pointer(PtrUInt(Data) - PtrUInt(Size and 3) + 4)^,Pointer(PtrUInt(@Buffer) - PtrUInt(Size and 3) + 4)^,Size and 3)
+          Move({%H-}Pointer(PtrUInt(Data) - PtrUInt(Size and 3) + 4)^,{%H-}Pointer(PtrUInt(@Buffer) - PtrUInt(Size and 3) + 4)^,Size and 3)
         else
           Move(Data^,Buffer,Size and 3);
       end
@@ -3840,9 +3841,9 @@ For i := 1 to Ceil(Result / 4) do
         Buffer64 := 0;
         For j := 0 to 4 do
           If (StrPosition + j) <= Length(Str) then
-            Buffer64 := Buffer64 + (AnsiTableIndex(Str[StrPosition + j],DecodingTable,85) * Coefficients_Base85[j + 1])
+            Buffer64 := Buffer64 + (Int64(AnsiTableIndex(Str[StrPosition + j],DecodingTable,85)) * Coefficients_Base85[j + 1])
           else
-            Buffer64 := Buffer64 + (84 * Coefficients_Base85[j + 1]);
+            Buffer64 := Buffer64 + (Int64(84) * Coefficients_Base85[j + 1]);
         If Buffer64 > High(LongWord) then
           raise EDecodingError.CreateFmt('AnsiDecode_Base85: Invalid value decoded (%d).',[Buffer64]);
         Buffer := Buffer64;
@@ -3852,7 +3853,7 @@ For i := 1 to Ceil(Result / 4) do
     If (i * 4) > Result  then
       begin
         If Reversed then
-          Move(Pointer(PtrUInt(@Buffer) - PtrUInt(Result and 3) + 4)^,Pointer(PtrUInt(Ptr) - PtrUInt(Result and 3) + 4)^,Result and 3)
+          Move({%H-}Pointer(PtrUInt(@Buffer) - PtrUInt(Result and 3) + 4)^,{%H-}Pointer(PtrUInt(Ptr) - PtrUInt(Result and 3) + 4)^,Result and 3)
         else
           Move(Buffer,Ptr^,Result and 3);
       end
@@ -3887,9 +3888,9 @@ For i := 1 to Ceil(Result / 4) do
         Buffer64 := 0;
         For j := 0 to 4 do
           If (StrPosition + j) <= Length(Str) then
-            Buffer64 := Buffer64 + (WideTableIndex(Str[StrPosition + j],DecodingTable,85) * Coefficients_Base85[j + 1])
+            Buffer64 := Buffer64 + (Int64(WideTableIndex(Str[StrPosition + j],DecodingTable,85)) * Coefficients_Base85[j + 1])
           else
-            Buffer64 := Buffer64 + (84 * Coefficients_Base85[j + 1]);
+            Buffer64 := Buffer64 + (Int64(84) * Coefficients_Base85[j + 1]);
         If Buffer64 > High(LongWord) then
           raise EDecodingError.CreateFmt('WideDecode_Base85: Invalid value decoded (%d).',[Buffer64]);
         Buffer := Buffer64;   
@@ -3899,7 +3900,7 @@ For i := 1 to Ceil(Result / 4) do
     If (i * 4) > Result  then
       begin
         If Reversed then
-          Move(Pointer(PtrUInt(@Buffer) - PtrUInt(Result and 3) + 4)^,Pointer(PtrUInt(Ptr) - PtrUInt(Result and 3) + 4)^,Result and 3)
+          Move({%H-}Pointer(PtrUInt(@Buffer) - PtrUInt(Result and 3) + 4)^,{%H-}Pointer(PtrUInt(Ptr) - PtrUInt(Result and 3) + 4)^,Result and 3)
         else
           Move(Buffer,Ptr^,Result and 3);
       end
