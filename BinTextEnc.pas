@@ -48,6 +48,12 @@ type
   EAllocationError     = class(EBinTextEncError);
   EInvalidCharacter    = class(EBinTextEncError);
 
+
+{==============================================================================}
+{------------------------------------------------------------------------------}
+{    Encoding alphabets and constatns                                          }
+{------------------------------------------------------------------------------}
+{==============================================================================}
 const
   AnsiPaddingChar_Base8     = AnsiChar('=');
   AnsiPaddingChar_Base32    = AnsiChar('=');
@@ -145,7 +151,11 @@ const
      'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p',
      'q','r','s','t','u');
 
+{==============================================================================}
 {------------------------------------------------------------------------------}
+{    Universal functions                                                       }
+{------------------------------------------------------------------------------}
+{==============================================================================}
 
 Function BuildHeader(Encoding: TBinTextEncoding; Reversed: Boolean): String;
 Function AnsiBuildHeader(Encoding: TBinTextEncoding; Reversed: Boolean): AnsiString;
@@ -189,7 +199,12 @@ Function Decode(const Str: String; Ptr: Pointer; Size: Integer; out Encoding: TB
 Function AnsiDecode(const Str: AnsiString; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Integer; overload;
 Function WideDecode(const Str: UnicodeString; Ptr: Pointer; Size: Integer; out Encoding: TBinTextEncoding; out Reversed: Boolean): Integer; overload;
 
+{==============================================================================}
 {------------------------------------------------------------------------------}
+{    Functions calculating length of encoded text from size of data that has   }
+{    to be encoded                                                             }
+{------------------------------------------------------------------------------}
+{==============================================================================}
 
 Function EncodedLength_Base2(DataSize: Integer; Header: Boolean = False): Integer;
 Function EncodedLength_Base8(DataSize: Integer; Header: Boolean = False; Padding: Boolean = True): Integer;
@@ -201,7 +216,11 @@ Function EncodedLength_Base32Hex(DataSize: Integer; Header: Boolean = False; Pad
 Function EncodedLength_Base64(DataSize: Integer; Header: Boolean = False; Padding: Boolean = True): Integer;
 Function EncodedLength_Base85(Data: Pointer; DataSize: Integer; Reversed: Boolean; Header: Boolean = False; Compression: Boolean = True; Trim: Boolean = True): Integer;
 
+{==============================================================================}
 {------------------------------------------------------------------------------}
+{    Functions calculating size of encoded data from length of encoded text    }
+{------------------------------------------------------------------------------}
+{==============================================================================}
 
 Function DecodedLength_Base2(const Str: String; Header: Boolean = False): Integer;
 Function AnsiDecodedLength_Base2(const Str: AnsiString; Header: Boolean = False): Integer;
@@ -254,7 +273,11 @@ Function DecodedLength_Base85(const Str: String; Header: Boolean; CompressionCha
 Function AnsiDecodedLength_Base85(const Str: AnsiString; Header: Boolean; CompressionChar: AnsiChar): Integer; overload;
 Function WideDecodedLength_Base85(const Str: UnicodeString; Header: Boolean; CompressionChar: UnicodeChar): Integer; overload;
 
+{==============================================================================}
 {------------------------------------------------------------------------------}
+{    Encoding functions                                                        }
+{------------------------------------------------------------------------------}
+{==============================================================================}
 
 Function Encode_Base2(Data: Pointer; Size: Integer; Reversed: Boolean = False): String; overload;
 Function AnsiEncode_Base2(Data: Pointer; Size: Integer; Reversed: Boolean = False): AnsiString; overload;
@@ -264,6 +287,7 @@ Function Encode_Base2(Data: Pointer; Size: Integer; Reversed: Boolean; const Enc
 Function AnsiEncode_Base2(Data: Pointer; Size: Integer; Reversed: Boolean; const EncodingTable: Array of AnsiChar): AnsiString; overload;
 Function WideEncode_Base2(Data: Pointer; Size: Integer; Reversed: Boolean; const EncodingTable: Array of UnicodeChar): UnicodeString; overload;
 
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
 Function Encode_Base8(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): String; overload;
 Function AnsiEncode_Base8(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): AnsiString; overload;
@@ -273,6 +297,7 @@ Function Encode_Base8(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: 
 Function AnsiEncode_Base8(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar): AnsiString; overload;
 Function WideEncode_Base8(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): UnicodeString; overload;
 
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
 Function Encode_Base10(Data: Pointer; Size: Integer; Reversed: Boolean = False): String; overload;
 Function AnsiEncode_Base10(Data: Pointer; Size: Integer; Reversed: Boolean = False): AnsiString; overload;
@@ -282,6 +307,7 @@ Function Encode_Base10(Data: Pointer; Size: Integer; Reversed: Boolean; const En
 Function AnsiEncode_Base10(Data: Pointer; Size: Integer; Reversed: Boolean; const EncodingTable: Array of AnsiChar): AnsiString; overload;
 Function WideEncode_Base10(Data: Pointer; Size: Integer; Reversed: Boolean; const EncodingTable: Array of UnicodeChar): UnicodeString; overload;
 
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
 Function Encode_Base16(Data: Pointer; Size: Integer; Reversed: Boolean = False): String; overload;
 Function AnsiEncode_Base16(Data: Pointer; Size: Integer; Reversed: Boolean = False): AnsiString; overload;
@@ -295,6 +321,7 @@ Function Encode_Hexadecimal(Data: Pointer; Size: Integer; Reversed: Boolean = Fa
 Function AnsiEncode_Hexadecimal(Data: Pointer; Size: Integer; Reversed: Boolean = False): AnsiString;
 Function WideEncode_Hexadecimal(Data: Pointer; Size: Integer; Reversed: Boolean = False): UnicodeString;
 
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
 Function Encode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): String; overload;
 Function AnsiEncode_Base32(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): AnsiString; overload;
@@ -308,6 +335,7 @@ Function Encode_Base32Hex(Data: Pointer; Size: Integer; Reversed: Boolean = Fals
 Function AnsiEncode_Base32Hex(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): AnsiString; overload;
 Function WideEncode_Base32Hex(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): UnicodeString; overload;
 
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
 Function Encode_Base64(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): String; overload;
 Function AnsiEncode_Base64(Data: Pointer; Size: Integer; Reversed: Boolean = False; Padding: Boolean = True): AnsiString; overload;
@@ -317,6 +345,7 @@ Function Encode_Base64(Data: Pointer; Size: Integer; Reversed: Boolean; Padding:
 Function AnsiEncode_Base64(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar): AnsiString; overload;
 Function WideEncode_Base64(Data: Pointer; Size: Integer; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): UnicodeString; overload;
 
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
 Function Encode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True): String; overload;
 Function AnsiEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True): AnsiString; overload;
@@ -326,7 +355,11 @@ Function Encode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean; Compress
 Function AnsiEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of AnsiChar; CompressionChar: AnsiChar): AnsiString; overload;
 Function WideEncode_Base85(Data: Pointer; Size: Integer; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of UnicodeChar; CompressionChar: UnicodeChar): UnicodeString; overload;
 
+{==============================================================================}
 {------------------------------------------------------------------------------}
+{    Decoding functions                                                        }
+{------------------------------------------------------------------------------}
+{==============================================================================}
 
 Function Decode_Base2(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
 Function AnsiDecode_Base2(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
@@ -344,6 +377,7 @@ Function Decode_Base2(const Str: String; Ptr: Pointer; Size: Integer; Reversed: 
 Function AnsiDecode_Base2(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar): Integer; overload;
 Function WideDecode_Base2(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar): Integer; overload;
 
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
 Function Decode_Base8(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
 Function AnsiDecode_Base8(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
@@ -361,6 +395,7 @@ Function Decode_Base8(const Str: String; Ptr: Pointer; Size: Integer; Reversed: 
 Function AnsiDecode_Base8(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar; PaddingChar: AnsiChar): Integer; overload;
 Function WideDecode_Base8(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): Integer; overload;
 
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
 Function Decode_Base10(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
 Function AnsiDecode_Base10(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
@@ -378,6 +413,7 @@ Function Decode_Base10(const Str: String; Ptr: Pointer; Size: Integer; Reversed:
 Function AnsiDecode_Base10(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar): Integer; overload;
 Function WideDecode_Base10(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar): Integer; overload;
 
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
 Function Decode_Base16(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
 Function AnsiDecode_Base16(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
@@ -403,6 +439,7 @@ Function Decode_Hexadecimal(const Str: String; Ptr: Pointer; Size: Integer; Reve
 Function AnsiDecode_Hexadecimal(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
 Function WideDecode_Hexadecimal(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
 
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
 Function Decode_Base32(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
 Function AnsiDecode_Base32(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
@@ -428,6 +465,7 @@ Function Decode_Base32Hex(const Str: String; Ptr: Pointer; Size: Integer; Revers
 Function AnsiDecode_Base32Hex(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
 Function WideDecode_Base32Hex(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean = False): Integer; overload;
 
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
 Function Decode_Base64(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
 Function AnsiDecode_Base64(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
@@ -445,6 +483,7 @@ Function Decode_Base64(const Str: String; Ptr: Pointer; Size: Integer; Reversed:
 Function AnsiDecode_Base64(const Str: AnsiString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of AnsiChar; PaddingChar: AnsiChar): Integer; overload;
 Function WideDecode_Base64(const Str: UnicodeString; Ptr: Pointer; Size: Integer; Reversed: Boolean; const DecodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar): Integer; overload;
 
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
 Function Decode_Base85(const Str: String; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
 Function AnsiDecode_Base85(const Str: AnsiString; out Size: Integer; Reversed: Boolean = False): Pointer; overload;
@@ -1119,6 +1158,7 @@ else
   raise EUnknownEncoding.CreateFmt('WideDecode: Unknown encoding (%d).',[Integer(Encoding)]);
 end;
 end;
+
 {==============================================================================}
 {------------------------------------------------------------------------------}
 {    Functions calculating length of encoded text from size of data that has   }
