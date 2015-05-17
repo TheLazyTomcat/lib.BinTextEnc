@@ -577,7 +577,11 @@ end;
 procedure ResolveDataPointer(var Ptr: Pointer; Reversed: Boolean; Size: TDataSize; EndOffset: LongWord = 1);
 begin
 If Reversed and Assigned(Ptr) then
-  Ptr := {%H-}Pointer(PtrUInt(Ptr) + Size - EndOffset);
+{$IFDEF x64}
+  Ptr := {%H-}Pointer({%H-}PtrUInt(Ptr) + Size - EndOffset);
+{$ELSE}
+  Ptr := {%H-}Pointer(Int64({%H-}PtrUInt(Ptr)) + Size - EndOffset);
+{$ENDIF}
 end;
 
 {------------------------------------------------------------------------------}
@@ -585,9 +589,9 @@ end;
 procedure AdvanceDataPointer(var Ptr: Pointer; Reversed: Boolean; Step: Byte = 1);
 begin
 If Reversed then
-  Ptr := {%H-}Pointer(PtrUInt(Ptr) - Step)
+  Ptr := {%H-}Pointer({%H-}PtrUInt(Ptr) - Step)
 else
-  Ptr := {%H-}Pointer(PtrUInt(Ptr) + Step);
+  Ptr := {%H-}Pointer({%H-}PtrUInt(Ptr) + Step);
 end;
 
 {------------------------------------------------------------------------------}
@@ -2637,7 +2641,7 @@ For i := 1 to Ceil(Size / 4) do
       begin
         Buffer := 0;
         If Reversed then
-          Move({%H-}Pointer(PtrUInt(Data) - PtrUInt(Size and 3) + 4)^,{%H-}Pointer(PtrUInt(@Buffer) - PtrUInt(Size and 3) + 4)^,Size and 3)
+          Move({%H-}Pointer({%H-}PtrUInt(Data) - PtrUInt(Size and 3) + 4)^,{%H-}Pointer({%H-}PtrUInt(@Buffer) - PtrUInt(Size and 3) + 4)^,Size and 3)
         else
           Move(Data^,Buffer,Size and 3);
       end
@@ -2679,7 +2683,7 @@ For i := 1 to Ceil(Size / 4) do
       begin
         Buffer := 0;
         If Reversed then
-          Move({%H-}Pointer(PtrUInt(Data) - PtrUInt(Size and 3) + 4)^,{%H-}Pointer(PtrUInt(@Buffer) - PtrUInt(Size and 3) + 4)^,Size and 3)
+          Move({%H-}Pointer({%H-}PtrUInt(Data) - PtrUInt(Size and 3) + 4)^,{%H-}Pointer({%H-}PtrUInt(@Buffer) - PtrUInt(Size and 3) + 4)^,Size and 3)
         else
           Move(Data^,Buffer,Size and 3);
       end
@@ -4162,7 +4166,7 @@ For i := 1 to Ceil(Result / 4) do
     If (i * 4) > Result  then
       begin
         If Reversed then
-          Move({%H-}Pointer(PtrUInt(@Buffer) - PtrUInt(Result and 3) + 4)^,{%H-}Pointer(PtrUInt(Ptr) - PtrUInt(Result and 3) + 4)^,Result and 3)
+          Move({%H-}Pointer({%H-}PtrUInt(@Buffer) - PtrUInt(Result and 3) + 4)^,{%H-}Pointer({%H-}PtrUInt(Ptr) - PtrUInt(Result and 3) + 4)^,Result and 3)
         else
           Move(Buffer,Ptr^,Result and 3);
       end
@@ -4210,7 +4214,7 @@ For i := 1 to Ceil(Result / 4) do
     If (i * 4) > Result  then
       begin
         If Reversed then
-          Move({%H-}Pointer(PtrUInt(@Buffer) - PtrUInt(Result and 3) + 4)^,{%H-}Pointer(PtrUInt(Ptr) - PtrUInt(Result and 3) + 4)^,Result and 3)
+          Move({%H-}Pointer({%H-}PtrUInt(@Buffer) - PtrUInt(Result and 3) + 4)^,{%H-}Pointer({%H-}PtrUInt(Ptr) - PtrUInt(Result and 3) + 4)^,Result and 3)
         else
           Move(Buffer,Ptr^,Result and 3);
       end
