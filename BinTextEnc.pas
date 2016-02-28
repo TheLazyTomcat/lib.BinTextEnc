@@ -9,9 +9,9 @@
 
   Binary to text encodings
 
-  ©František Milt 2015-11-17
+  ©František Milt 2016-02-28
 
-  Version 1.1.1
+  Version 1.1.2
 
   Notes:
     - Do not call EncodedLength function with Base85 or Ascii85 encoding.
@@ -3111,7 +3111,7 @@ end;
 
 Function WideDecode_Base2(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: Boolean = False): Pointer;
 begin
-Result := AnsiDecode_Base2(Str,Size,Reversed,WideBuildDecodingTable(EncodingTable),Header);
+Result := WideDecode_Base2(Str,Size,Reversed,WideBuildDecodingTable(EncodingTable),Header);
 end;
 
 {------------------------------------------------------------------------------}
@@ -3941,7 +3941,7 @@ If Result > 0 then
   For i := 0 to Pred(Result) do
     begin
       PByte(Ptr)^ := (AnsiDecodeFromTable(Str[TMemSize(StrOffset) + (i * 2) + 1],DecodingTable,16) shl 4) or
-                     (AnsiDecodeFromTable(Str[TMemSize(StrOffset) + (i * 2) + 2],DecodingTable,16) and $0F);
+                     (AnsiDecodeFromTable(Str[TMemSize(StrOffset) + (i * 2) + 2],DecodingTable,16) and Byte($0F));
       AdvanceDataPointer(Ptr,Reversed);
     end;
 end;
@@ -3969,7 +3969,7 @@ If Result > 0 then
   For i := 0 to Pred(Result) do
     begin
       PByte(Ptr)^ := (WideDecodeFromTable(Str[TMemSize(StrOffset) + (i * 2) + 1],DecodingTable,16) shl 4) or
-                     (WideDecodeFromTable(Str[TMemSize(StrOffset) + (i * 2) + 2],DecodingTable,16) and $0F);
+                     (WideDecodeFromTable(Str[TMemSize(StrOffset) + (i * 2) + 2],DecodingTable,16) and Byte($0F));
       AdvanceDataPointer(Ptr,Reversed);
     end;
 end;
