@@ -9,9 +9,9 @@
 
   Binary to text encodings
 
-  ©František Milt 2016-02-28
+  ©František Milt 2016-03-01
 
-  Version 1.1.2
+  Version 1.1.3
 
   Notes:
     - Do not call EncodedLength function with Base85 or Ascii85 encoding.
