@@ -9,9 +9,9 @@
 
   Binary to text encodings
 
-  ©František Milt 2016-03-01
+  ©František Milt 2016-07-30
 
-  Version 1.1.3
+  Version 1.1.4
 
   Notes:
     - Do not call EncodedLength function with Base85 or Ascii85 encoding.
@@ -3160,7 +3160,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('AnsiDecode_Base2: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -3184,7 +3183,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('WideDecode_Base2: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -3378,7 +3376,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('AnsiDecode_Base8: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -3402,7 +3399,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('WideDecode_Base8: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -3654,7 +3650,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('AnsiDecode_Base10: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -3678,7 +3673,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('WideDecode_Base10: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -3869,7 +3863,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('AnsiDecode_Base16: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -3893,7 +3886,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('WideDecode_Base16: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -3995,7 +3987,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('AnsiDecode_Hexadecimal: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -4019,7 +4010,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('WideDecode_Hexadecimal: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -4179,7 +4169,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('AnsiDecode_Base32: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -4203,7 +4192,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('WideDecode_Base32: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -4528,7 +4516,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('AnsiDecode_Base64: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -4552,7 +4539,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('WideDecode_Base64: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -4794,7 +4780,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('AnsiDecode_Base85: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
@@ -4818,7 +4803,6 @@ If Size > 0 then
         raise EAllocationError.CreateFmt('WideDecode_Base85: Wrong result size (%d, expected %d)',[ResultSize,Size]);
     except
       FreeMem(Result,Size);
-      Result := nil;
       Size := 0;
       raise;
     end;
