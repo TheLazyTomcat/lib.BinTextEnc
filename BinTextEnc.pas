@@ -32,6 +32,10 @@ unit BinTextEnc;
   {$ENDIF}
 {$IFEND}
 
+{$IFDEF FPC}
+  {$MODE ObjFPC}{$H+}
+{$ENDIF}
+
 interface
 
 uses
