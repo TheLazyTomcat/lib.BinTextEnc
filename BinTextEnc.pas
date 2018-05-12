@@ -9,9 +9,9 @@
 
   Binary to text encodings
 
-  ©František Milt 2016-07-30
+  ©František Milt 2018-05-12
 
-  Version 1.1.4
+  Version 1.1.5
 
   Notes:
     - Do not call EncodedLength function with Base85 or Ascii85 encoding.
@@ -29,16 +29,21 @@ unit BinTextEnc;
 
 {$IF not(defined(CPUX86_64) or defined(CPUX64) or defined(CPU386))}
   {$DEFINE PurePascal}
-{$ELSE}
-  {$IFDEF FPC}
-    {$ASMMODE Intel}
-  {$ENDIF}
 {$IFEND}
 
 {$IFDEF FPC}
   {$MODE ObjFPC}{$H+}
+  {$INLINE ON}
+  {$DEFINE CanInline}
+  {$ASMMODE Intel}
   {$DEFINE FPC_DisableWarns}
   {$MACRO ON}
+{$ELSE}
+  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
+    {$DEFINE CanInline}
+  {$ELSE}
+    {$UNDEF CanInline}
+  {$IFEND}  
 {$ENDIF}
 
 interface
@@ -62,12 +67,21 @@ type
   EHeaderWontFit       = class(EBinTextEncError);
   EEncodedTextTooShort = class(EBinTextEncError);
 
+const
+  AnsiEncodingHexadecimal = AnsiChar('$');
+  AnsiEncodingHeaderStart = AnsiChar('#');
+  AnsiEncodingHeaderEnd   = AnsiChar(':');
 
-{==============================================================================}
-{------------------------------------------------------------------------------}
-{    Encoding alphabets and constatns                                          }
-{------------------------------------------------------------------------------}
-{==============================================================================}
+  WideEncodingHexadecimal = UnicodeChar('$');
+  WideEncodingHeaderStart = UnicodeChar('#');
+  WideEncodingHeaderEnd   = UnicodeChar(':');  
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                        Encoding alphabets and constants
+--------------------------------------------------------------------------------
+===============================================================================}
 const
   AnsiPaddingChar_Base8     = AnsiChar('=');
   AnsiPaddingChar_Base32    = AnsiChar('=');
@@ -82,64 +96,64 @@ const
   AnsiCompressionChar_Base85 = AnsiChar('_');
   WideCompressionChar_Base85 = UnicodeChar('_');
 
-  AnsiEncodingTable_Base2: Array[0..1] of AnsiChar =
+  AnsiEncodingTable_Base2: array[0..1] of AnsiChar =
     ('0','1');
-  WideEncodingTable_Base2: Array[0..1] of UnicodeChar =
+  WideEncodingTable_Base2: array[0..1] of UnicodeChar =
     ('0','1');
 
-  AnsiEncodingTable_Base8: Array[0..7] of AnsiChar =
+  AnsiEncodingTable_Base8: array[0..7] of AnsiChar =
     ('0','1','2','3','4','5','6','7');
-  WideEncodingTable_Base8: Array[0..7] of UnicodeChar =
+  WideEncodingTable_Base8: array[0..7] of UnicodeChar =
     ('0','1','2','3','4','5','6','7');
 
-  AnsiEncodingTable_Base10: Array[0..9] of AnsiChar =
+  AnsiEncodingTable_Base10: array[0..9] of AnsiChar =
     ('0','1','2','3','4','5','6','7','8','9');
-  WideEncodingTable_Base10: Array[0..9] of UnicodeChar =
+  WideEncodingTable_Base10: array[0..9] of UnicodeChar =
     ('0','1','2','3','4','5','6','7','8','9');
 
-  AnsiEncodingTable_Base16: Array[0..15] of AnsiChar =
+  AnsiEncodingTable_Base16: array[0..15] of AnsiChar =
     ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
-  WideEncodingTable_Base16: Array[0..15] of UnicodeChar =
-    ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
-
-  AnsiEncodingTable_Hexadecimal: Array[0..15] of AnsiChar =
-    ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
-  WideEncodingTable_Hexadecimal: Array[0..15] of UnicodeChar =
+  WideEncodingTable_Base16: array[0..15] of UnicodeChar =
     ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
 
-  AnsiEncodingTable_Base32: Array[0..31] of AnsiChar =
+  AnsiEncodingTable_Hexadecimal: array[0..15] of AnsiChar =
+    ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
+  WideEncodingTable_Hexadecimal: array[0..15] of UnicodeChar =
+    ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
+
+  AnsiEncodingTable_Base32: array[0..31] of AnsiChar =
     ('A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P',
      'Q','R','S','T','U','V','W','X','Y','Z','2','3','4','5','6','7');
-  WideEncodingTable_Base32: Array[0..31] of UnicodeChar =
+  WideEncodingTable_Base32: array[0..31] of UnicodeChar =
     ('A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P',
      'Q','R','S','T','U','V','W','X','Y','Z','2','3','4','5','6','7');
 
-  AnsiEncodingTable_Base32Hex: Array[0..31] of AnsiChar =
+  AnsiEncodingTable_Base32Hex: array[0..31] of AnsiChar =
     ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F',
      'G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V');
-  WideEncodingTable_Base32Hex: Array[0..31] of UnicodeChar =
+  WideEncodingTable_Base32Hex: array[0..31] of UnicodeChar =
     ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F',
      'G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V');
 
-  AnsiEncodingTable_Base64: Array[0..63] of AnsiChar =
+  AnsiEncodingTable_Base64: array[0..63] of AnsiChar =
     ('A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P',
      'Q','R','S','T','U','V','W','X','Y','Z','a','b','c','d','e','f',
      'g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v',
      'w','x','y','z','0','1','2','3','4','5','6','7','8','9','+','/');
-  WideEncodingTable_Base64: Array[0..63] of UnicodeChar =
+  WideEncodingTable_Base64: array[0..63] of UnicodeChar =
     ('A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P',
      'Q','R','S','T','U','V','W','X','Y','Z','a','b','c','d','e','f',
      'g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v',
      'w','x','y','z','0','1','2','3','4','5','6','7','8','9','+','/');
 
-  AnsiEncodingTable_Base85: Array[0..84] of AnsiChar =
+  AnsiEncodingTable_Base85: array[0..84] of AnsiChar =
     ('0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f',
      'g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v',
      'w','x','y','z','A','B','C','D','E','F','G','H','I','J','K','L',
      'M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','.','-',
      ':','+','=','^','!','/','*','?','&','<','>','(',')','[',']','{',
      '}','@','%','$','#');
-  WideEncodingTable_Base85: Array[0..84] of UnicodeChar =
+  WideEncodingTable_Base85: array[0..84] of UnicodeChar =
     ('0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f',
      'g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v',
      'w','x','y','z','A','B','C','D','E','F','G','H','I','J','K','L',
@@ -150,14 +164,14 @@ const
   AnsiCompressionChar_Ascii85 = AnsiChar('z');
   WideCompressionChar_Ascii85 = UnicodeChar('z');
 
-  AnsiEncodingTable_Ascii85: Array[0..84] of AnsiChar =
+  AnsiEncodingTable_Ascii85: array[0..84] of AnsiChar =
     ('!','"','#','$','%','&','''','(',')','*','+',',','-','.','/','0',
      '1','2','3','4','5','6','7','8','9',':',';','<','=','>','?','@',
      'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P',
      'Q','R','S','T','U','V','W','X','Y','Z','[','\',']','^','_','`',
      'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p',
      'q','r','s','t','u');
-  WideEncodingTable_Ascii85: Array[0..84] of UnicodeChar =
+  WideEncodingTable_Ascii85: array[0..84] of UnicodeChar =
     ('!','"','#','$','%','&','''','(',')','*','+',',','-','.','/','0',
      '1','2','3','4','5','6','7','8','9',':',';','<','=','>','?','@',
      'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P',
@@ -165,13 +179,13 @@ const
      'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p',
      'q','r','s','t','u');
 
-{==============================================================================}
-{------------------------------------------------------------------------------}
-{    Decoding tables                                                           }
-{------------------------------------------------------------------------------}
-{==============================================================================}
+{===============================================================================
+--------------------------------------------------------------------------------
+                                Decoding tables
+--------------------------------------------------------------------------------
+===============================================================================}
 type
-  TDecodingTable = Array[0..127] of Byte;
+  TDecodingTable = array[0..127] of Byte;
 
 const
   DecodingTable_Base2: TDecodingTable =
@@ -274,64 +288,64 @@ const
      $3F, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $4A, $4B, $4C, $4D, $4E,
      $4F, $50, $51, $52, $53, $54, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF);
 
-{==============================================================================}
-{------------------------------------------------------------------------------}
-{    Universal functions                                                       }
-{------------------------------------------------------------------------------}
-{==============================================================================}
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Universal functions
+--------------------------------------------------------------------------------
+===============================================================================}
 
-Function BuildDecodingTable(EncodingTable: Array of Char): TDecodingTable;
-Function AnsiBuildDecodingTable(EncodingTable: Array of AnsiChar): TDecodingTable;
-Function WideBuildDecodingTable(EncodingTable: Array of UnicodeChar): TDecodingTable;
+Function BuildDecodingTable(EncodingTable: array of Char): TDecodingTable;
+Function AnsiBuildDecodingTable(EncodingTable: array of AnsiChar): TDecodingTable;
+Function WideBuildDecodingTable(EncodingTable: array of UnicodeChar): TDecodingTable;
 
-Function BuildHeader(Encoding: TBinTextEncoding; Reversed: Boolean): String;
+Function BuildHeader(Encoding: TBinTextEncoding; Reversed: Boolean): String;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiBuildHeader(Encoding: TBinTextEncoding; Reversed: Boolean): AnsiString;
 Function WideBuildHeader(Encoding: TBinTextEncoding; Reversed: Boolean): UnicodeString;
 
-Function GetEncoding(const Str: String; out Reversed: Boolean): TBinTextEncoding;
+Function GetEncoding(const Str: String; out Reversed: Boolean): TBinTextEncoding;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiGetEncoding(const Str: AnsiString; out Reversed: Boolean): TBinTextEncoding;
 Function WideGetEncoding(const Str: UnicodeString; out Reversed: Boolean): TBinTextEncoding;
 
 Function EncodedLength(Encoding: TBinTextEncoding; DataSize: TMemSize; Header: Boolean = False; Padding: Boolean = True): TStrSize;
 
-Function DecodedLength(Encoding: TBinTextEncoding; const Str: String; Header: Boolean = True): TMemSize;
+Function DecodedLength(Encoding: TBinTextEncoding; const Str: String; Header: Boolean = True): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecodedLength(Encoding: TBinTextEncoding; const Str: AnsiString; Header: Boolean = True): TMemSize;
 Function WideDecodedLength(Encoding: TBinTextEncoding; const Str: UnicodeString; Header: Boolean = True): TMemSize;
 
-Function Encode(Encoding: TBinTextEncoding; Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True): String;
+Function Encode(Encoding: TBinTextEncoding; Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True): String;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiEncode(Encoding: TBinTextEncoding; Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True): AnsiString;
 Function WideEncode(Encoding: TBinTextEncoding; Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True): UnicodeString;
 
-Function Decode(const Str: String; out Size: TMemSize): Pointer; overload;
-Function AnsiDecode(const Str: AnsiString; out Size: TMemSize): Pointer; overload;
-Function WideDecode(const Str: UnicodeString; out Size: TMemSize): Pointer; overload;
+Function Decode(const Str: String; out Size: TMemSize): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode(const Str: AnsiString; out Size: TMemSize): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode(const Str: UnicodeString; out Size: TMemSize): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode(const Str: String; out Size: TMemSize; out Encoding: TBinTextEncoding): Pointer; overload;
-Function AnsiDecode(const Str: AnsiString; out Size: TMemSize; out Encoding: TBinTextEncoding): Pointer; overload;
-Function WideDecode(const Str: UnicodeString; out Size: TMemSize; out Encoding: TBinTextEncoding): Pointer; overload;
+Function Decode(const Str: String; out Size: TMemSize; out Encoding: TBinTextEncoding): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode(const Str: AnsiString; out Size: TMemSize; out Encoding: TBinTextEncoding): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode(const Str: UnicodeString; out Size: TMemSize; out Encoding: TBinTextEncoding): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode(const Str: String; out Size: TMemSize; out Encoding: TBinTextEncoding; out Reversed: Boolean): Pointer; overload;
+Function Decode(const Str: String; out Size: TMemSize; out Encoding: TBinTextEncoding; out Reversed: Boolean): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode(const Str: AnsiString; out Size: TMemSize; out Encoding: TBinTextEncoding; out Reversed: Boolean): Pointer; overload;
 Function WideDecode(const Str: UnicodeString; out Size: TMemSize; out Encoding: TBinTextEncoding; out Reversed: Boolean): Pointer; overload;
 
-Function Decode(const Str: String; Ptr: Pointer; Size: TMemSize): TMemSize; overload;
-Function AnsiDecode(const Str: AnsiString; Ptr: Pointer; Size: TMemSize): TMemSize; overload;
-Function WideDecode(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize): TMemSize; overload;
+Function Decode(const Str: String; Ptr: Pointer; Size: TMemSize): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode(const Str: AnsiString; Ptr: Pointer; Size: TMemSize): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode(const Str: String; Ptr: Pointer; Size: TMemSize; out Encoding: TBinTextEncoding): TMemSize; overload;
-Function AnsiDecode(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; out Encoding: TBinTextEncoding): TMemSize; overload;
-Function WideDecode(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; out Encoding: TBinTextEncoding): TMemSize; overload;
+Function Decode(const Str: String; Ptr: Pointer; Size: TMemSize; out Encoding: TBinTextEncoding): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; out Encoding: TBinTextEncoding): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; out Encoding: TBinTextEncoding): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode(const Str: String; Ptr: Pointer; Size: TMemSize; out Encoding: TBinTextEncoding; out Reversed: Boolean): TMemSize; overload;
+Function Decode(const Str: String; Ptr: Pointer; Size: TMemSize; out Encoding: TBinTextEncoding; out Reversed: Boolean): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; out Encoding: TBinTextEncoding; out Reversed: Boolean): TMemSize; overload;
 Function WideDecode(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; out Encoding: TBinTextEncoding; out Reversed: Boolean): TMemSize; overload;
 
-{==============================================================================}
-{------------------------------------------------------------------------------}
-{    Functions calculating length of encoded text from size of data that has   }
-{    to be encoded                                                             }
-{------------------------------------------------------------------------------}
-{==============================================================================}
+{===============================================================================
+--------------------------------------------------------------------------------
+                  Functions calculating length of encoded text
+                    from size of data that has to be encoded
+--------------------------------------------------------------------------------
+===============================================================================}
 
 Function EncodedLength_Base2(DataSize: TMemSize; Header: Boolean = False): TStrSize;
 Function EncodedLength_Base8(DataSize: TMemSize; Header: Boolean = False; Padding: Boolean = True): TStrSize;
@@ -344,362 +358,365 @@ Function EncodedLength_Base64(DataSize: TMemSize; Header: Boolean = False; Paddi
 Function EncodedLength_Base85(Data: Pointer; DataSize: TMemSize; Reversed: Boolean; Header: Boolean = False; Compression: Boolean = True; Trim: Boolean = True): TStrSize;
 Function EncodedLength_Ascii85(Data: Pointer; DataSize: TMemSize; Reversed: Boolean; Header: Boolean = False; Compression: Boolean = True; Trim: Boolean = True): TStrSize;
 
-{==============================================================================}
-{------------------------------------------------------------------------------}
-{    Functions calculating size of encoded data from length of encoded text    }
-{------------------------------------------------------------------------------}
-{==============================================================================}
+{===============================================================================
+--------------------------------------------------------------------------------
+                   Functions calculating size of encoded data
+                          from length of encoded text
+--------------------------------------------------------------------------------
+===============================================================================}
 
-Function DecodedLength_Base2(const Str: String; Header: Boolean = False): TMemSize;
+Function DecodedLength_Base2(const Str: String; Header: Boolean = False): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecodedLength_Base2(const Str: AnsiString; Header: Boolean = False): TMemSize;
 Function WideDecodedLength_Base2(const Str: UnicodeString; Header: Boolean = False): TMemSize;
 
-Function DecodedLength_Base8(const Str: String; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecodedLength_Base8(const Str: AnsiString; Header: Boolean = False): TMemSize; overload;
-Function WideDecodedLength_Base8(const Str: UnicodeString; Header: Boolean = False): TMemSize; overload;
-Function DecodedLength_Base8(const Str: String; Header: Boolean; PaddingChar: Char): TMemSize; overload;
+Function DecodedLength_Base8(const Str: String; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecodedLength_Base8(const Str: AnsiString; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecodedLength_Base8(const Str: UnicodeString; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function DecodedLength_Base8(const Str: String; Header: Boolean; PaddingChar: Char): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecodedLength_Base8(const Str: AnsiString; Header: Boolean; PaddingChar: AnsiChar): TMemSize; overload;
 Function WideDecodedLength_Base8(const Str: UnicodeString; Header: Boolean; PaddingChar: UnicodeChar): TMemSize; overload;
 
-Function DecodedLength_Base10(const Str: String; Header: Boolean = False): TMemSize;
+Function DecodedLength_Base10(const Str: String; Header: Boolean = False): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecodedLength_Base10(const Str: AnsiString; Header: Boolean = False): TMemSize;
 Function WideDecodedLength_Base10(const Str: UnicodeString; Header: Boolean = False): TMemSize;
 
-Function DecodedLength_Base16(const Str: String; Header: Boolean = False): TMemSize;
+Function DecodedLength_Base16(const Str: String; Header: Boolean = False): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecodedLength_Base16(const Str: AnsiString; Header: Boolean = False): TMemSize;
 Function WideDecodedLength_Base16(const Str: UnicodeString; Header: Boolean = False): TMemSize;
 
-Function DecodedLength_Hexadecimal(const Str: String; Header: Boolean = False): TMemSize;
+Function DecodedLength_Hexadecimal(const Str: String; Header: Boolean = False): TMemSize;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecodedLength_Hexadecimal(const Str: AnsiString; Header: Boolean = False): TMemSize;
 Function WideDecodedLength_Hexadecimal(const Str: UnicodeString; Header: Boolean = False): TMemSize;
 
-Function DecodedLength_Base32(const Str: String; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecodedLength_Base32(const Str: AnsiString; Header: Boolean = False): TMemSize; overload;
-Function WideDecodedLength_Base32(const Str: UnicodeString; Header: Boolean = False): TMemSize; overload;
-Function DecodedLength_Base32(const Str: String; Header: Boolean; PaddingChar: Char): TMemSize; overload;
+Function DecodedLength_Base32(const Str: String; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecodedLength_Base32(const Str: AnsiString; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecodedLength_Base32(const Str: UnicodeString; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function DecodedLength_Base32(const Str: String; Header: Boolean; PaddingChar: Char): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecodedLength_Base32(const Str: AnsiString; Header: Boolean; PaddingChar: AnsiChar): TMemSize; overload;
 Function WideDecodedLength_Base32(const Str: UnicodeString; Header: Boolean; PaddingChar: UnicodeChar): TMemSize; overload;
 
-Function DecodedLength_Base32Hex(const Str: String; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecodedLength_Base32Hex(const Str: AnsiString; Header: Boolean = False): TMemSize; overload;
-Function WideDecodedLength_Base32Hex(const Str: UnicodeString; Header: Boolean = False): TMemSize; overload;
-Function DecodedLength_Base32Hex(const Str: String; Header: Boolean; PaddingChar: Char): TMemSize; overload;
-Function AnsiDecodedLength_Base32Hex(const Str: AnsiString; Header: Boolean; PaddingChar: AnsiChar): TMemSize; overload;
-Function WideDecodedLength_Base32Hex(const Str: UnicodeString; Header: Boolean; PaddingChar: UnicodeChar): TMemSize; overload;
+Function DecodedLength_Base32Hex(const Str: String; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecodedLength_Base32Hex(const Str: AnsiString; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecodedLength_Base32Hex(const Str: UnicodeString; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function DecodedLength_Base32Hex(const Str: String; Header: Boolean; PaddingChar: Char): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecodedLength_Base32Hex(const Str: AnsiString; Header: Boolean; PaddingChar: AnsiChar): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecodedLength_Base32Hex(const Str: UnicodeString; Header: Boolean; PaddingChar: UnicodeChar): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function DecodedLength_Base64(const Str: String; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecodedLength_Base64(const Str: AnsiString; Header: Boolean = False): TMemSize; overload;
-Function WideDecodedLength_Base64(const Str: UnicodeString; Header: Boolean = False): TMemSize; overload;
-Function DecodedLength_Base64(const Str: String; Header: Boolean; PaddingChar: Char): TMemSize; overload;
+Function DecodedLength_Base64(const Str: String; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecodedLength_Base64(const Str: AnsiString; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecodedLength_Base64(const Str: UnicodeString; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function DecodedLength_Base64(const Str: String; Header: Boolean; PaddingChar: Char): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecodedLength_Base64(const Str: AnsiString; Header: Boolean; PaddingChar: AnsiChar): TMemSize; overload;
 Function WideDecodedLength_Base64(const Str: UnicodeString; Header: Boolean; PaddingChar: UnicodeChar): TMemSize; overload;
 
-Function DecodedLength_Base85(const Str: String; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecodedLength_Base85(const Str: AnsiString; Header: Boolean = False): TMemSize; overload;
-Function WideDecodedLength_Base85(const Str: UnicodeString; Header: Boolean = False): TMemSize; overload;
-Function DecodedLength_Base85(const Str: String; Header: Boolean; CompressionChar: Char): TMemSize; overload;
+Function DecodedLength_Base85(const Str: String; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecodedLength_Base85(const Str: AnsiString; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecodedLength_Base85(const Str: UnicodeString; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function DecodedLength_Base85(const Str: String; Header: Boolean; CompressionChar: Char): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecodedLength_Base85(const Str: AnsiString; Header: Boolean; CompressionChar: AnsiChar): TMemSize; overload;
 Function WideDecodedLength_Base85(const Str: UnicodeString; Header: Boolean; CompressionChar: UnicodeChar): TMemSize; overload;
 
-Function DecodedLength_Ascii85(const Str: String; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecodedLength_Ascii85(const Str: AnsiString; Header: Boolean = False): TMemSize; overload;
-Function WideDecodedLength_Ascii85(const Str: UnicodeString; Header: Boolean = False): TMemSize; overload;
+Function DecodedLength_Ascii85(const Str: String; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecodedLength_Ascii85(const Str: AnsiString; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecodedLength_Ascii85(const Str: UnicodeString; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-{==============================================================================}
-{------------------------------------------------------------------------------}
-{    Encoding functions                                                        }
-{------------------------------------------------------------------------------}
-{==============================================================================}
 
-Function Encode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: String = ''): String; overload;
-Function AnsiEncode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: UnicodeString = ''): UnicodeString; overload;
+{===============================================================================
+--------------------------------------------------------------------------------
+                               Encoding functions
+--------------------------------------------------------------------------------
+===============================================================================}
 
-Function Encode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: String = ''): String; overload;
-Function AnsiEncode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
+Function Encode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: String = ''): String; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiEncode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: AnsiString = ''): AnsiString; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideEncode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: UnicodeString = ''): UnicodeString; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
-
-Function Encode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: String = ''): String; overload;
-Function AnsiEncode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: UnicodeString = ''): UnicodeString; overload;
-
-Function Encode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: String = ''): String; overload;
-Function AnsiEncode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
+Function Encode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: String = ''): String; overload;
+Function AnsiEncode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: AnsiString = ''): AnsiString; overload;
+Function WideEncode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
 
 {--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
-Function Encode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: String = ''): String; overload;
-Function AnsiEncode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: UnicodeString = ''): UnicodeString; overload;
+Function Encode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: String = ''): String; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiEncode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: AnsiString = ''): AnsiString; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideEncode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: UnicodeString = ''): UnicodeString; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Encode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: String = ''): String; overload;
-Function AnsiEncode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
-
-{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
-
-Function Encode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: String = ''): String; overload;
-Function AnsiEncode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: UnicodeString = ''): UnicodeString; overload;
-
-Function Encode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: String = ''): String; overload;
-Function AnsiEncode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
-
-Function Encode_Hexadecimal(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: String = ''): String;
-Function AnsiEncode_Hexadecimal(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: AnsiString = ''): AnsiString;
-Function WideEncode_Hexadecimal(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: UnicodeString = ''): UnicodeString;
+Function Encode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: String = ''): String; overload;
+Function AnsiEncode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: AnsiString = ''): AnsiString; overload;
+Function WideEncode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
 
 {--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
-Function Encode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: String = ''): String; overload;
-Function AnsiEncode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: UnicodeString = ''): UnicodeString; overload;
+Function Encode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: String = ''): String; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiEncode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: AnsiString = ''): AnsiString; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideEncode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: UnicodeString = ''): UnicodeString; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Encode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: String = ''): String; overload;
-Function AnsiEncode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
-
-Function Encode_Base32Hex(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: String = ''): String; overload;
-Function AnsiEncode_Base32Hex(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base32Hex(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: UnicodeString = ''): UnicodeString; overload;
+Function Encode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: String = ''): String; overload;
+Function AnsiEncode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: AnsiString = ''): AnsiString; overload;
+Function WideEncode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
 
 {--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
-Function Encode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: String = ''): String; overload;
-Function AnsiEncode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: UnicodeString = ''): UnicodeString; overload;
+Function Encode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: String = ''): String; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiEncode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: AnsiString = ''): AnsiString; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideEncode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: UnicodeString = ''): UnicodeString; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Encode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: String = ''): String; overload;
-Function AnsiEncode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
+Function Encode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: String = ''): String; overload;
+Function AnsiEncode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: AnsiString = ''): AnsiString; overload;
+Function WideEncode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
+
+Function Encode_Hexadecimal(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: String = ''): String;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiEncode_Hexadecimal(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: AnsiString = ''): AnsiString;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideEncode_Hexadecimal(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: UnicodeString = ''): UnicodeString;{$IFDEF CanInline} inline; {$ENDIF}
 
 {--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
-Function Encode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True; Header: String = ''): String; overload;
-Function AnsiEncode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True; Header: UnicodeString = ''): UnicodeString; overload;
+Function Encode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: String = ''): String; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiEncode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: AnsiString = ''): AnsiString; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideEncode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: UnicodeString = ''): UnicodeString; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Encode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of Char; CompressionChar: Char; Header: String = ''): String; overload;
-Function AnsiEncode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of AnsiChar; CompressionChar: AnsiChar; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of UnicodeChar; CompressionChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
+Function Encode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: String = ''): String; overload;
+Function AnsiEncode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: AnsiString = ''): AnsiString; overload;
+Function WideEncode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
 
-Function Encode_Ascii85(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True; Header: String = ''): String; overload;
-Function AnsiEncode_Ascii85(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True; Header: AnsiString = ''): AnsiString; overload;
-Function WideEncode_Ascii85(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True; Header: UnicodeString = ''): UnicodeString; overload;
+Function Encode_Base32Hex(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: String = ''): String; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiEncode_Base32Hex(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: AnsiString = ''): AnsiString; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideEncode_Base32Hex(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: UnicodeString = ''): UnicodeString; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-{==============================================================================}
-{------------------------------------------------------------------------------}
-{    Decoding functions                                                        }
-{------------------------------------------------------------------------------}
-{==============================================================================}
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
-Function Decode_Base2(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base2(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base2(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
+Function Encode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: String = ''): String; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiEncode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: AnsiString = ''): AnsiString; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideEncode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Padding: Boolean = True; Header: UnicodeString = ''): UnicodeString; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base2(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base2(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base2(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
+Function Encode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: String = ''): String; overload;
+Function AnsiEncode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: AnsiString = ''): AnsiString; overload;
+Function WideEncode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
 
-Function Decode_Base2(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base2(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base2(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: Boolean = False): Pointer; overload;
+{--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
-Function Decode_Base2(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base2(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base2(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: Boolean = False): TMemSize; overload;
+Function Encode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True; Header: String = ''): String; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiEncode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True; Header: AnsiString = ''): AnsiString; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideEncode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True; Header: UnicodeString = ''): UnicodeString; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base2(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): Pointer; overload;
+Function Encode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: array of Char; CompressionChar: Char; Header: String = ''): String; overload;
+Function AnsiEncode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: array of AnsiChar; CompressionChar: AnsiChar; Header: AnsiString = ''): AnsiString; overload;
+Function WideEncode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: array of UnicodeChar; CompressionChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString; overload;
+
+Function Encode_Ascii85(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True; Header: String = ''): String; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiEncode_Ascii85(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True; Header: AnsiString = ''): AnsiString; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideEncode_Ascii85(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Compression: Boolean = True; Trim: Boolean = True; Header: UnicodeString = ''): UnicodeString; overload;{$IFDEF CanInline} inline; {$ENDIF}
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                               Decoding functions
+--------------------------------------------------------------------------------
+===============================================================================}
+
+Function Decode_Base2(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base2(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base2(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+
+Function Decode_Base2(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base2(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base2(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+
+Function Decode_Base2(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: Boolean = False): Pointer; overload;
+Function AnsiDecode_Base2(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: Boolean = False): Pointer; overload;
+Function WideDecode_Base2(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: Boolean = False): Pointer; overload;
+
+Function Decode_Base2(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: Boolean = False): TMemSize; overload;
+Function AnsiDecode_Base2(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: Boolean = False): TMemSize; overload;
+Function WideDecode_Base2(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: Boolean = False): TMemSize; overload;
+
+Function Decode_Base2(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base2(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): Pointer; overload;
 Function WideDecode_Base2(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Base2(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base2(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base2(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): TMemSize; overload;
 Function WideDecode_Base2(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): TMemSize; overload;
 
 {--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
-Function Decode_Base8(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base8(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base8(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
+Function Decode_Base8(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base8(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base8(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base8(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base8(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base8(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base8(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base8(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base8(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base8(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base8(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base8(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer; overload;
+Function Decode_Base8(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: Boolean = False): Pointer; overload;
+Function AnsiDecode_Base8(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): Pointer; overload;
+Function WideDecode_Base8(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Base8(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base8(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base8(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base8(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: Boolean = False): TMemSize; overload;
+Function AnsiDecode_Base8(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize; overload;
+Function WideDecode_Base8(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize; overload;
 
-Function Decode_Base8(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: Char; Header: Boolean = False): Pointer; overload;
+Function Decode_Base8(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: Char; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base8(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: AnsiChar; Header: Boolean = False): Pointer; overload;
 Function WideDecode_Base8(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Base8(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: Char; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base8(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: Char; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base8(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize; overload;
 Function WideDecode_Base8(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize; overload;
 
 {--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
-Function Decode_Base10(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base10(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base10(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
+Function Decode_Base10(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base10(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base10(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base10(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base10(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base10(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base10(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base10(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base10(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base10(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base10(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base10(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: Boolean = False): Pointer; overload;
+Function Decode_Base10(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: Boolean = False): Pointer; overload;
+Function AnsiDecode_Base10(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: Boolean = False): Pointer; overload;
+Function WideDecode_Base10(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Base10(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base10(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base10(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base10(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: Boolean = False): TMemSize; overload;
+Function AnsiDecode_Base10(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: Boolean = False): TMemSize; overload;
+Function WideDecode_Base10(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: Boolean = False): TMemSize; overload;
 
-Function Decode_Base10(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): Pointer; overload;
+Function Decode_Base10(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base10(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): Pointer; overload;
 Function WideDecode_Base10(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Base10(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base10(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base10(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): TMemSize; overload;
 Function WideDecode_Base10(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): TMemSize; overload;
 
 {--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
-Function Decode_Base16(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base16(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base16(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
+Function Decode_Base16(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base16(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base16(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base16(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base16(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base16(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base16(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base16(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base16(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base16(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base16(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base16(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: Boolean = False): Pointer; overload;
+Function Decode_Base16(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: Boolean = False): Pointer; overload;
+Function AnsiDecode_Base16(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: Boolean = False): Pointer; overload;
+Function WideDecode_Base16(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Base16(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base16(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base16(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base16(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: Boolean = False): TMemSize; overload;
+Function AnsiDecode_Base16(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: Boolean = False): TMemSize; overload;
+Function WideDecode_Base16(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: Boolean = False): TMemSize; overload;
 
-Function Decode_Base16(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): Pointer; overload;
+Function Decode_Base16(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base16(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): Pointer; overload;
 Function WideDecode_Base16(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Base16(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base16(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base16(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False; Hex: Boolean = False): TMemSize; overload;
 Function WideDecode_Base16(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; Header: Boolean = False; Hex: Boolean = False): TMemSize; overload;
 
-Function Decode_Hexadecimal(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
+Function Decode_Hexadecimal(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Hexadecimal(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
 Function WideDecode_Hexadecimal(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Hexadecimal(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Hexadecimal(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Hexadecimal(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
+Function Decode_Hexadecimal(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Hexadecimal(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Hexadecimal(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
 {--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
-Function Decode_Base32(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base32(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base32(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
+Function Decode_Base32(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base32(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base32(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base32(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base32(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base32(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base32(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base32(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base32(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base32(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base32(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base32(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer; overload;
+Function Decode_Base32(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: Boolean = False): Pointer; overload;
+Function AnsiDecode_Base32(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): Pointer; overload;
+Function WideDecode_Base32(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Base32(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base32(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base32(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base32(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: Boolean = False): TMemSize; overload;
+Function AnsiDecode_Base32(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize; overload;
+Function WideDecode_Base32(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize; overload;
 
-Function Decode_Base32(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: Char; Header: Boolean = False): Pointer; overload;
+Function Decode_Base32(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: Char; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base32(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: AnsiChar; Header: Boolean = False): Pointer; overload;
 Function WideDecode_Base32(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Base32(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: Char; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base32(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: Char; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base32(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize; overload;
 Function WideDecode_Base32(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize; overload;
 
-Function Decode_Base32Hex(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base32Hex(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base32Hex(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
+Function Decode_Base32Hex(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base32Hex(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base32Hex(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base32Hex(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base32Hex(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base32Hex(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base32Hex(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base32Hex(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base32Hex(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
 {--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
-Function Decode_Base64(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base64(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base64(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
+Function Decode_Base64(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base64(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base64(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base64(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base64(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base64(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base64(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base64(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base64(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base64(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base64(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base64(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer; overload;
+Function Decode_Base64(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: Boolean = False): Pointer; overload;
+Function AnsiDecode_Base64(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): Pointer; overload;
+Function WideDecode_Base64(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Base64(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base64(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base64(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base64(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: Boolean = False): TMemSize; overload;
+Function AnsiDecode_Base64(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize; overload;
+Function WideDecode_Base64(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize; overload;
 
-Function Decode_Base64(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: Char; Header: Boolean = False): Pointer; overload;
+Function Decode_Base64(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: Char; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base64(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: AnsiChar; Header: Boolean = False): Pointer; overload;
 Function WideDecode_Base64(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Base64(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: Char; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base64(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: Char; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base64(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize; overload;
 Function WideDecode_Base64(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize; overload;
 
 {--  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --  --}
 
-Function Decode_Base85(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base85(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base85(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
+Function Decode_Base85(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base85(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base85(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base85(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base85(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base85(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base85(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Base85(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Base85(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Base85(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; CompressionChar: Char; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Base85(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; CompressionChar: AnsiChar; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Base85(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; CompressionChar: UnicodeChar; Header: Boolean = False): Pointer; overload;
+Function Decode_Base85(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; CompressionChar: Char; Header: Boolean = False): Pointer; overload;
+Function AnsiDecode_Base85(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; CompressionChar: AnsiChar; Header: Boolean = False): Pointer; overload;
+Function WideDecode_Base85(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; CompressionChar: UnicodeChar; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Base85(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; CompressionChar: Char; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Base85(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; CompressionChar: AnsiChar; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Base85(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; CompressionChar: UnicodeChar; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base85(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; CompressionChar: Char; Header: Boolean = False): TMemSize; overload;
+Function AnsiDecode_Base85(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; CompressionChar: AnsiChar; Header: Boolean = False): TMemSize; overload;
+Function WideDecode_Base85(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; CompressionChar: UnicodeChar; Header: Boolean = False): TMemSize; overload;
 
-Function Decode_Base85(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; CompressionChar: Char; Header: Boolean = False): Pointer; overload;
+Function Decode_Base85(const Str: String; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; CompressionChar: Char; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base85(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; CompressionChar: AnsiChar; Header: Boolean = False): Pointer; overload;
 Function WideDecode_Base85(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; CompressionChar: UnicodeChar; Header: Boolean = False): Pointer; overload;
 
-Function Decode_Base85(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; CompressionChar: Char; Header: Boolean = False): TMemSize; overload;
+Function Decode_Base85(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; CompressionChar: Char; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 Function AnsiDecode_Base85(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; CompressionChar: AnsiChar; Header: Boolean = False): TMemSize; overload;
 Function WideDecode_Base85(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const DecodingTable: TDecodingTable; CompressionChar: UnicodeChar; Header: Boolean = False): TMemSize; overload;
 
-Function Decode_Ascii85(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function AnsiDecode_Ascii85(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
-Function WideDecode_Ascii85(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;
+Function Decode_Ascii85(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Ascii85(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Ascii85(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function Decode_Ascii85(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function AnsiDecode_Ascii85(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
-Function WideDecode_Ascii85(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;
+Function Decode_Ascii85(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiDecode_Ascii85(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideDecode_Ascii85(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): TMemSize; overload;{$IFDEF CanInline} inline; {$ENDIF}
 
 
 implementation
@@ -715,14 +732,6 @@ uses
 {$ENDIF}
 
 const
-  AnsiEncodingHexadecimal = AnsiChar('$');
-  AnsiEncodingHeaderStart = AnsiChar('#');
-  AnsiEncodingHeaderEnd   = AnsiChar(':');
-
-  WideEncodingHexadecimal = UnicodeChar('$');
-  WideEncodingHeaderStart = UnicodeChar('#');
-  WideEncodingHeaderEnd   = UnicodeChar(':');
-
   HeaderLength = Length(AnsiEncodingHeaderStart + '00' + AnsiEncodingHeaderEnd);
 
   HexadecimalHeaderLength = Length(AnsiEncodingHexadecimal);
@@ -732,19 +741,19 @@ const
   ENCNUM_BASE10    = 10;
   ENCNUM_BASE16    = 16;
   ENCNUM_BASE32    = 32;
-  ENCNUM_BASE32HEX = 33;
+  ENCNUM_BASE32HEX = 127;
   ENCNUM_BASE64    = 64;
   ENCNUM_BASE85    = 85;
-  ENCNUM_ASCII85   = 86;
+  ENCNUM_ASCII85   = 126;
 
-  Coefficients_Base10: Array[1..3] of UInt16 = (100,10,1);
-  Coefficients_Base85: Array[1..5] of UInt32 = (52200625,614125,7225,85,1);
+  Coefficients_Base10: array[1..3] of UInt16 = (100,10,1);
+  Coefficients_Base85: array[1..5] of UInt32 = (52200625,614125,7225,85,1);
 
-{==============================================================================}
-{------------------------------------------------------------------------------}
-{    Auxiliary functions                                                       }
-{------------------------------------------------------------------------------}
-{==============================================================================}
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Auxiliary functions
+--------------------------------------------------------------------------------
+===============================================================================}
 
 Function GetEncodingNumber(Encoding: TBinTextEncoding): Byte;
 begin
@@ -766,21 +775,17 @@ end;
 
 {------------------------------------------------------------------------------}
 
-procedure ResolveDataPointer(var Ptr: Pointer; Reversed: Boolean; Size: TMemSize; EndOffset: UInt32 = 1);
+procedure ResolveDataPointer(var Ptr: Pointer; Reversed: Boolean; Size: TMemSize; EndOffset: UInt32 = 1);{$IFDEF CanInline} inline; {$ENDIF}
 begin
 If Reversed and Assigned(Ptr) then
 {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-{$IFDEF x64}
-  Ptr := Pointer(PtrUInt(Ptr) + Size - EndOffset);
-{$ELSE}
-  Ptr := Pointer(Int64(PtrUInt(Ptr)) + Size - EndOffset);
-{$ENDIF}
+  Ptr := Pointer(PtrUInt(Ptr) + (PtrUInt(Size) - PtrUInt(EndOffset)));
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
 {------------------------------------------------------------------------------}
 
-procedure AdvanceDataPointer(var Ptr: Pointer; Reversed: Boolean; Step: Byte = 1);
+procedure AdvanceDataPointer(var Ptr: Pointer; Reversed: Boolean; Step: Byte = 1);{$IFDEF CanInline} inline; {$ENDIF}
 begin
 {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
 If Reversed then
@@ -792,7 +797,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-procedure DecodeCheckSize(Size, Required: TMemSize; Base: Integer; MaxError: UInt32 = 0);
+procedure DecodeCheckSize(Size, Required: TMemSize; Base: Integer; MaxError: UInt32 = 0);{$IFDEF CanInline} inline; {$ENDIF}
 begin
 If (Size + MaxError) < Required then
   raise EAllocationError.CreateFmt('DecodeCheckSize[base%d]: Output buffer too small (%d, required %d).',[Base,Size,Required]);
@@ -830,8 +835,10 @@ var
 begin
 Result := 0;
 For i := Length(Str) downto 1 do
-  If Str[i] = PaddingChar then Inc(Result)
-    else Break;
+  If Str[i] = PaddingChar then
+    Inc(Result)
+  else
+    Break{For i};
 end;
 
 {------------------------------------------------------------------------------}
@@ -842,8 +849,10 @@ var
 begin
 Result := 0;
 For i := Length(Str) downto 1 do
-  If Str[i] = PaddingChar then Inc(Result)
-    else Break;
+  If Str[i] = PaddingChar then
+    Inc(Result)
+  else
+    Break{For i};
 end;
 
 {------------------------------------------------------------------------------}
@@ -855,8 +864,10 @@ begin
 Result := 0;
 For i := 1 to Length(Str) do
   begin
-    If Str[i] = CompressionChar then Inc(Result,4)
-      else If (Ord(Str[i]) <= 32) or (Ord(Str[i]) >= 127) then Dec(Result);
+    If Str[i] = CompressionChar then
+      Inc(Result,4)
+    else If (Ord(Str[i]) <= 32) or (Ord(Str[i]) >= 127) then
+      Dec(Result);
   end;
 end;
 
@@ -869,8 +880,10 @@ begin
 Result := 0;
 For i := 1 to Length(Str) do
   begin
-    If Str[i] = CompressionChar then Inc(Result,4)
-      else If (Ord(Str[i]) <= 32) or (Ord(Str[i]) >= 127) then Dec(Result);
+    If Str[i] = CompressionChar then
+      Inc(Result,4)
+    else If (Ord(Str[i]) <= 32) or (Ord(Str[i]) >= 127) then
+      Dec(Result);
   end;
 end;
 
@@ -889,13 +902,14 @@ Value := UInt32((Value and $000000FF shl 24) or (Value and $0000FF00 shl 8) or
 end;
 {$ENDIF}
 
-{==============================================================================}
-{------------------------------------------------------------------------------}
-{    Universal functions                                                       }
-{------------------------------------------------------------------------------}
-{==============================================================================}
 
-Function BuildDecodingTable(EncodingTable: Array of Char): TDecodingTable;
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Universal functions
+--------------------------------------------------------------------------------
+===============================================================================}
+
+Function BuildDecodingTable(EncodingTable: array of Char): TDecodingTable;
 begin
 {$IFDEF Unicode}
 Result := WideBuildDecodingTable(EncodingTable);
@@ -907,7 +921,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiBuildDecodingTable(EncodingTable: Array of AnsiChar): TDecodingTable;
+Function AnsiBuildDecodingTable(EncodingTable: array of AnsiChar): TDecodingTable;
 var
   i:  Integer;
 begin
@@ -918,7 +932,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function WideBuildDecodingTable(EncodingTable: Array of UnicodeChar): TDecodingTable;
+Function WideBuildDecodingTable(EncodingTable: array of UnicodeChar): TDecodingTable;
 var
   i:  Integer;
 begin
@@ -949,8 +963,10 @@ If Encoding = bteHexadecimal then
 else
   begin
     EncodingNum := GetEncodingNumber(Encoding);
-    If Reversed then EncodingNum := EncodingNum or $80
-      else EncodingNum := EncodingNum and $7F;
+    If Reversed then
+      EncodingNum := EncodingNum or $80
+    else
+      EncodingNum := EncodingNum and $7F;
     Result := AnsiEncodingHeaderStart +
               AnsiEncode_Hexadecimal(@EncodingNum,SizeOf(EncodingNum),False) +
               AnsiEncodingHeaderEnd;
@@ -968,8 +984,10 @@ If Encoding = bteHexadecimal then
 else
   begin
     EncodingNum := GetEncodingNumber(Encoding);
-    If Reversed then EncodingNum := EncodingNum or $80
-      else EncodingNum := EncodingNum and $7F;
+    If Reversed then
+      EncodingNum := EncodingNum or $80
+    else
+      EncodingNum := EncodingNum and $7F;
     Result := WideEncodingHeaderStart +
               WideEncode_Hexadecimal(@EncodingNum,SizeOf(EncodingNum),False) +
               WideEncodingHeaderEnd;
@@ -1431,12 +1449,13 @@ else
 end;
 end;
 
-{==============================================================================}
-{------------------------------------------------------------------------------}
-{    Functions calculating length of encoded text from size of data that has   }
-{    to be encoded                                                             }
-{------------------------------------------------------------------------------}
-{==============================================================================}
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                  Functions calculating length of encoded text
+                    from size of data that has to be encoded
+--------------------------------------------------------------------------------
+===============================================================================}
 
 Function EncodedLength_Base2(DataSize: TMemSize; Header: Boolean = False): TStrSize;
 begin
@@ -1611,11 +1630,13 @@ begin
 Result := EncodedLength_Base85(Data,DataSize,Reversed,Header,Compression,Trim);
 end;
 
-{==============================================================================}
-{------------------------------------------------------------------------------}
-{    Functions calculating size of encoded data from length of encoded text    }
-{------------------------------------------------------------------------------}
-{==============================================================================}
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                   Functions calculating size of encoded data
+                          from length of encoded text
+--------------------------------------------------------------------------------
+===============================================================================}
 
 Function DecodedLength_Base2(const Str: String; Header: Boolean = False): TMemSize;
 begin
@@ -2104,11 +2125,12 @@ begin
 Result := WideDecodedLength_Base85(Str,Header,WideCompressionChar_Ascii85);
 end;
 
-{==============================================================================}
-{------------------------------------------------------------------------------}
-{    Encoding functions                                                        }
-{------------------------------------------------------------------------------}
-{==============================================================================}
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                               Encoding functions
+--------------------------------------------------------------------------------
+===============================================================================}
 
 Function Encode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean = False; Header: String = ''): String;
 begin
@@ -2135,7 +2157,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Encode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: String = ''): String;
+Function Encode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: String = ''): String;
 begin
 {$IFDEF Unicode}
 Result := WideEncode_Base2(Data,Size,Reversed,EncodingTable,Header);
@@ -2147,7 +2169,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function AnsiEncode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: AnsiString = ''): AnsiString;
+Function AnsiEncode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: AnsiString = ''): AnsiString;
 var
   Buffer:     Byte;
   i,j:        TMemSize;
@@ -2174,7 +2196,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function WideEncode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: UnicodeString = ''): UnicodeString;
+Function WideEncode_Base2(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: UnicodeString = ''): UnicodeString;
 var
   Buffer:     Byte;
   i,j:        TMemSize;
@@ -2225,7 +2247,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Encode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: String = ''): String;
+Function Encode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: String = ''): String;
 begin
 {$IFDEF Unicode}
 Result := WideEncode_Base8(Data,Size,Reversed,Padding,EncodingTable,PaddingChar,Header);
@@ -2237,7 +2259,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function AnsiEncode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: AnsiString = ''): AnsiString;
+Function AnsiEncode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: AnsiString = ''): AnsiString;
 var
   Buffer:         Byte;
   i:              TMemSize;
@@ -2300,7 +2322,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function WideEncode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString;
+Function WideEncode_Base8(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString;
 var
   Buffer:         Byte;
   i:              TMemSize;
@@ -2387,7 +2409,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Encode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: String = ''): String;
+Function Encode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: String = ''): String;
 begin
 {$IFDEF Unicode}
 Result := WideEncode_Base10(Data,Size,Reversed,EncodingTable,Header);
@@ -2399,7 +2421,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function AnsiEncode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: AnsiString = ''): AnsiString;
+Function AnsiEncode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: AnsiString = ''): AnsiString;
 var
   Buffer:     Byte;
   i,j:        TMemSize;
@@ -2426,7 +2448,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function WideEncode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: UnicodeString = ''): UnicodeString;
+Function WideEncode_Base10(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: UnicodeString = ''): UnicodeString;
 var
   Buffer:     Byte;
   i,j:        TMemSize;
@@ -2477,7 +2499,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Encode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: String = ''): String;
+Function Encode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: String = ''): String;
 begin
 {$IFDEF Unicode}
 Result := WideEncode_Base16(Data,Size,Reversed,EncodingTable,Header);
@@ -2489,7 +2511,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function AnsiEncode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: AnsiString = ''): AnsiString;
+Function AnsiEncode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: AnsiString = ''): AnsiString;
 var
   i:          TMemSize;
   StrOffset:  TStrSize;
@@ -2511,7 +2533,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function WideEncode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: UnicodeString = ''): UnicodeString;
+Function WideEncode_Base16(Data: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: UnicodeString = ''): UnicodeString;
 var
   i:          TMemSize;
   StrOffset:  TStrSize;
@@ -2582,7 +2604,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Encode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: String = ''): String;
+Function Encode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: String = ''): String;
 begin
 {$IFDEF Unicode}
 Result := WideEncode_Base32(Data,Size,Reversed,Padding,EncodingTable,PaddingChar,Header);
@@ -2594,7 +2616,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function AnsiEncode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: AnsiString = ''): AnsiString;
+Function AnsiEncode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: AnsiString = ''): AnsiString;
 var
   Buffer:         Byte;
   i:              TMemSize;
@@ -2669,7 +2691,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function WideEncode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString;
+Function WideEncode_Base32(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString;
 var
   Buffer:         Byte;
   i:              TMemSize;
@@ -2793,7 +2815,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Encode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: String = ''): String;
+Function Encode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: String = ''): String;
 begin
 {$IFDEF Unicode}
 Result := WideEncode_Base64(Data,Size,Reversed,Padding,EncodingTable,PaddingChar,Header);
@@ -2805,7 +2827,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function AnsiEncode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: AnsiString = ''): AnsiString;
+Function AnsiEncode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: AnsiString = ''): AnsiString;
 var
   Buffer:         Byte;
   i:              TMemSize;
@@ -2864,7 +2886,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function WideEncode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString;
+Function WideEncode_Base64(Data: Pointer; Size: TMemSize; Reversed: Boolean; Padding: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString;
 var
   Buffer:         Byte;
   i:              TMemSize;
@@ -2947,7 +2969,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Encode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of Char; CompressionChar: Char; Header: String = ''): String;
+Function Encode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: array of Char; CompressionChar: Char; Header: String = ''): String;
 begin
 {$IFDEF Unicode}
 Result := WideEncode_Base85(Data,Size,Reversed,Compression,Trim,EncodingTable,CompressionChar,Header);
@@ -2959,7 +2981,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function AnsiEncode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of AnsiChar; CompressionChar: AnsiChar; Header: AnsiString = ''): AnsiString;
+Function AnsiEncode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: array of AnsiChar; CompressionChar: AnsiChar; Header: AnsiString = ''): AnsiString;
 var
   Buffer:         UInt32;
   i:              TMemSize;
@@ -3010,7 +3032,7 @@ end;
 {------------------------------------------------------------------------------}
 
 {$IFDEF FPCDWM}{$PUSH}W5058{$ENDIF}
-Function WideEncode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: Array of UnicodeChar; CompressionChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString;
+Function WideEncode_Base85(Data: Pointer; Size: TMemSize; Reversed: Boolean; Compression: Boolean; Trim: Boolean; const EncodingTable: array of UnicodeChar; CompressionChar: UnicodeChar; Header: UnicodeString = ''): UnicodeString;
 var
   Buffer:         UInt32;
   i:              TMemSize;
@@ -3083,11 +3105,11 @@ begin
 Result := WideEncode_Base85(Data,Size,Reversed,Compression,Trim,WideEncodingTable_Ascii85,WideCompressionChar_Ascii85,Header);
 end;
 
-{==============================================================================}
-{------------------------------------------------------------------------------}
-{    Decoding functions                                                        }
-{------------------------------------------------------------------------------}
-{==============================================================================}
+{===============================================================================
+--------------------------------------------------------------------------------
+                               Decoding functions
+--------------------------------------------------------------------------------
+===============================================================================}
 
 Function Decode_Base2(const Str: String; out Size: TMemSize; Reversed: Boolean = False; Header: Boolean = False): Pointer;
 begin
@@ -3139,7 +3161,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base2(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: Boolean = False): Pointer;
+Function Decode_Base2(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: Boolean = False): Pointer;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base2(Str,Size,Reversed,EncodingTable,Header);
@@ -3150,21 +3172,21 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base2(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: Boolean = False): Pointer;
+Function AnsiDecode_Base2(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: Boolean = False): Pointer;
 begin
 Result := AnsiDecode_Base2(Str,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base2(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: Boolean = False): Pointer;
+Function WideDecode_Base2(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: Boolean = False): Pointer;
 begin
 Result := WideDecode_Base2(Str,Size,Reversed,WideBuildDecodingTable(EncodingTable),Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base2(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: Boolean = False): TMemSize;
+Function Decode_Base2(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: Boolean = False): TMemSize;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base2(Str,Ptr,Size,Reversed,EncodingTable,Header);
@@ -3175,14 +3197,14 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base2(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: Boolean = False): TMemSize;
+Function AnsiDecode_Base2(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: Boolean = False): TMemSize;
 begin
 Result := AnsiDecode_Base2(Str,Ptr,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base2(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: Boolean = False): TMemSize;
+Function WideDecode_Base2(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: Boolean = False): TMemSize;
 begin
 Result := WideDecode_Base2(Str,Ptr,Size,Reversed,WideBuildDecodingTable(EncodingTable),Header);
 end;
@@ -3359,7 +3381,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base8(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: Boolean = False): Pointer;
+Function Decode_Base8(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: Boolean = False): Pointer;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base8(Str,Size,Reversed,EncodingTable,PaddingChar,Header);
@@ -3370,21 +3392,21 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base8(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): Pointer;
+Function AnsiDecode_Base8(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): Pointer;
 begin
 Result := AnsiDecode_Base8(Str,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),PaddingChar,Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base8(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer;
+Function WideDecode_Base8(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer;
 begin
 Result := WideDecode_Base8(Str,Size,Reversed,WideBuildDecodingTable(EncodingTable),PaddingChar,Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base8(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: Boolean = False): TMemSize;
+Function Decode_Base8(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: Boolean = False): TMemSize;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base8(Str,Ptr,Size,Reversed,EncodingTable,PaddingChar,Header);
@@ -3395,14 +3417,14 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base8(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize;
+Function AnsiDecode_Base8(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize;
 begin
 Result := AnsiDecode_Base8(Str,Ptr,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),PaddingChar,Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base8(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize;
+Function WideDecode_Base8(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize;
 begin
 Result := WideDecode_Base8(Str,Ptr,Size,Reversed,WideBuildDecodingTable(EncodingTable),PaddingChar,Header);
 end;
@@ -3637,7 +3659,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base10(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: Boolean = False): Pointer;
+Function Decode_Base10(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: Boolean = False): Pointer;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base10(Str,Size,Reversed,EncodingTable,Header);
@@ -3648,21 +3670,21 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base10(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: Boolean = False): Pointer;
+Function AnsiDecode_Base10(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: Boolean = False): Pointer;
 begin
 Result := AnsiDecode_Base10(Str,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base10(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: Boolean = False): Pointer;
+Function WideDecode_Base10(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: Boolean = False): Pointer;
 begin
 Result := WideDecode_Base10(Str,Size,Reversed,WideBuildDecodingTable(EncodingTable),Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base10(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: Boolean = False): TMemSize;
+Function Decode_Base10(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: Boolean = False): TMemSize;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base10(Str,Ptr,Size,Reversed,EncodingTable,Header);
@@ -3673,14 +3695,14 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base10(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: Boolean = False): TMemSize;
+Function AnsiDecode_Base10(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: Boolean = False): TMemSize;
 begin
 Result := AnsiDecode_Base10(Str,Ptr,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base10(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: Boolean = False): TMemSize;
+Function WideDecode_Base10(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: Boolean = False): TMemSize;
 begin
 Result := WideDecode_Base10(Str,Ptr,Size,Reversed,WideBuildDecodingTable(EncodingTable),Header);
 end;
@@ -3854,7 +3876,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base16(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: Boolean = False): Pointer;
+Function Decode_Base16(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: Boolean = False): Pointer;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base16(Str,Size,Reversed,EncodingTable,Header);
@@ -3865,21 +3887,21 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base16(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: Boolean = False): Pointer;
+Function AnsiDecode_Base16(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: Boolean = False): Pointer;
 begin
 Result := AnsiDecode_Base16(Str,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base16(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: Boolean = False): Pointer;
+Function WideDecode_Base16(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: Boolean = False): Pointer;
 begin
 Result := WideDecode_Base16(Str,Size,Reversed,WideBuildDecodingTable(EncodingTable),Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base16(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; Header: Boolean = False): TMemSize;
+Function Decode_Base16(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; Header: Boolean = False): TMemSize;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base16(Str,Ptr,Size,Reversed,EncodingTable,Header);
@@ -3890,14 +3912,14 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base16(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; Header: Boolean = False): TMemSize;
+Function AnsiDecode_Base16(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; Header: Boolean = False): TMemSize;
 begin
 Result := AnsiDecode_Base16(Str,Ptr,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base16(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; Header: Boolean = False): TMemSize;
+Function WideDecode_Base16(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; Header: Boolean = False): TMemSize;
 begin
 Result := WideDecode_Base16(Str,Ptr,Size,Reversed,WideBuildDecodingTable(EncodingTable),Header);
 end;
@@ -4164,7 +4186,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base32(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: Boolean = False): Pointer;
+Function Decode_Base32(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: Boolean = False): Pointer;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base32(Str,Size,Reversed,EncodingTable,PaddingChar,Header);
@@ -4175,21 +4197,21 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base32(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): Pointer;
+Function AnsiDecode_Base32(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): Pointer;
 begin
 Result := AnsiDecode_Base32(Str,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),PaddingChar,Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base32(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer;
+Function WideDecode_Base32(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer;
 begin
 Result := WideDecode_Base32(Str,Size,Reversed,WideBuildDecodingTable(EncodingTable),PaddingChar,Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base32(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: Boolean = False): TMemSize;
+Function Decode_Base32(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: Boolean = False): TMemSize;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base32(Str,Ptr,Size,Reversed,EncodingTable,PaddingChar,Header);
@@ -4200,14 +4222,14 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base32(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize;
+Function AnsiDecode_Base32(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize;
 begin
 Result := AnsiDecode_Base32(Str,Ptr,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),PaddingChar,Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base32(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize;
+Function WideDecode_Base32(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize;
 begin
 Result := WideDecode_Base32(Str,Ptr,Size,Reversed,WideBuildDecodingTable(EncodingTable),PaddingChar,Header);
 end;
@@ -4514,7 +4536,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base64(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: Boolean = False): Pointer;
+Function Decode_Base64(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: Boolean = False): Pointer;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base64(Str,Size,Reversed,EncodingTable,PaddingChar,Header);
@@ -4525,21 +4547,21 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base64(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): Pointer;
+Function AnsiDecode_Base64(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): Pointer;
 begin
 Result := AnsiDecode_Base64(Str,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),PaddingChar,Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base64(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer;
+Function WideDecode_Base64(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): Pointer;
 begin
 Result := WideDecode_Base64(Str,Size,Reversed,WideBuildDecodingTable(EncodingTable),PaddingChar,Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base64(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; PaddingChar: Char; Header: Boolean = False): TMemSize;
+Function Decode_Base64(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; PaddingChar: Char; Header: Boolean = False): TMemSize;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base64(Str,Ptr,Size,Reversed,EncodingTable,PaddingChar,Header);
@@ -4550,14 +4572,14 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base64(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize;
+Function AnsiDecode_Base64(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; PaddingChar: AnsiChar; Header: Boolean = False): TMemSize;
 begin
 Result := AnsiDecode_Base64(Str,Ptr,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),PaddingChar,Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base64(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize;
+Function WideDecode_Base64(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; PaddingChar: UnicodeChar; Header: Boolean = False): TMemSize;
 begin
 Result := WideDecode_Base64(Str,Ptr,Size,Reversed,WideBuildDecodingTable(EncodingTable),PaddingChar,Header);
 end;
@@ -4782,7 +4804,7 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base85(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; CompressionChar: Char; Header: Boolean = False): Pointer;
+Function Decode_Base85(const Str: String; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; CompressionChar: Char; Header: Boolean = False): Pointer;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base85(Str,Size,Reversed,EncodingTable,CompressionChar,Header);
@@ -4793,21 +4815,21 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base85(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; CompressionChar: AnsiChar; Header: Boolean = False): Pointer;
+Function AnsiDecode_Base85(const Str: AnsiString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; CompressionChar: AnsiChar; Header: Boolean = False): Pointer;
 begin
 Result := AnsiDecode_Base85(Str,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),CompressionChar,Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base85(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; CompressionChar: UnicodeChar; Header: Boolean = False): Pointer;
+Function WideDecode_Base85(const Str: UnicodeString; out Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; CompressionChar: UnicodeChar; Header: Boolean = False): Pointer;
 begin
 Result := WideDecode_Base85(Str,Size,Reversed,WideBuildDecodingTable(EncodingTable),CompressionChar,Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function Decode_Base85(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of Char; CompressionChar: Char; Header: Boolean = False): TMemSize;
+Function Decode_Base85(const Str: String; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of Char; CompressionChar: Char; Header: Boolean = False): TMemSize;
 begin
 {$IFDEF Unicode}
 Result := WideDecode_Base85(Str,Ptr,Size,Reversed,EncodingTable,CompressionChar,Header);
@@ -4818,14 +4840,14 @@ end;
 
 {------------------------------------------------------------------------------}
 
-Function AnsiDecode_Base85(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of AnsiChar; CompressionChar: AnsiChar; Header: Boolean = False): TMemSize;
+Function AnsiDecode_Base85(const Str: AnsiString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of AnsiChar; CompressionChar: AnsiChar; Header: Boolean = False): TMemSize;
 begin
 Result := AnsiDecode_Base85(Str,Ptr,Size,Reversed,AnsiBuildDecodingTable(EncodingTable),CompressionChar,Header);
 end;
 
 {------------------------------------------------------------------------------}
 
-Function WideDecode_Base85(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: Array of UnicodeChar; CompressionChar: UnicodeChar; Header: Boolean = False): TMemSize;
+Function WideDecode_Base85(const Str: UnicodeString; Ptr: Pointer; Size: TMemSize; Reversed: Boolean; const EncodingTable: array of UnicodeChar; CompressionChar: UnicodeChar; Header: Boolean = False): TMemSize;
 begin
 Result := WideDecode_Base85(Str,Ptr,Size,Reversed,WideBuildDecodingTable(EncodingTable),CompressionChar,Header);
 end;
