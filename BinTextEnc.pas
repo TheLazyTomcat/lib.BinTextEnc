@@ -69,7 +69,7 @@ type
   TBTEEncoding = (encUnknown,encBase2,encBase8,encBase10,encBase16,encBase32,
                   encBase32Hex,encBase64,encBase85,encASCII85);
 
-  TBTEEncodingFeature = (efPadding,efCompression,efTrim,efReversible,
+  TBTEEncodingFeature = (efPadding,efReversible,efCompression,efTrim,
                          efOutputSize,efSlowOutputSize);
 
   TBTEEncodingFeatures = set of TBTEEncodingFeature;
@@ -89,12 +89,12 @@ type
     fBreakProcessing:     Boolean;
     // encoding settings
     fHeader:              Boolean;
+    fReversed:            Boolean;
     fPadding:             Boolean;
     fPaddingChar:         Char;
     fCompression:         Boolean;
     fCompressionChar:     Char;
     fTrim:                Boolean;
-    fReversed:            Boolean;
     // processing variables
     fEncodedStringPos:    TStrOff;
     // events
@@ -105,11 +105,11 @@ type
     Function GetEncodedString: String; virtual;
     procedure SetEncodedString(const Value: String); virtual;
     procedure SetPadding(Value: Boolean); virtual;
+    procedure SetReversed(Value: Boolean); virtual;
     procedure SetPaddingChar(Value: Char); virtual;
     procedure SetCompression(Value: Boolean); virtual;
     procedure SetCompressionChar(Value: Char); virtual;
     procedure SetTrim(Value: Boolean); virtual;
-    procedure SetReversed(Value: Boolean); virtual;
     procedure SetHeader(Value: Boolean); virtual;
     // events firing
     procedure DoProgress(Progress: Double); virtual;
@@ -203,12 +203,12 @@ type
     property EncodedString: String read GetEncodedString write SetEncodedString;
     property IsProcessing: Boolean read fIsProcessing;
     property Header: Boolean read fHeader write SetHeader;
+    property Reversed: Boolean read fReversed write SetReversed;
     property Padding: Boolean read fPadding write SetPadding;
     property PaddingCharacter: Char read fPaddingChar write SetPaddingChar;
     property Compression: Boolean read fCompression write SetCompression;
     property CompressionCharacter: Char read fCompressionChar write SetCompressionChar;
     property Trim: Boolean read fTrim write SetTrim;
-    property Reversed: Boolean read fReversed write SetReversed;
     property ProgressCoefficient: Integer read fProgressCoef write fProgressCoef;
     property OnProgressEvent: TFloatEvent read fOnProgressEvent write fOnProgressEvent;
     property OnProgressCallback: TFloatCallback read fOnProgressCallback write fOnProgressCallback;
@@ -268,14 +268,14 @@ type
     procedure RollBack; virtual;
     Function ResolveChar(C: Char): Byte; virtual;
     Function CountPadding: TStrSize; virtual;
-    procedure Decode(const Buffer; Size: TMemSize); virtual;
-    procedure DecodeSpecific(const Buffer; Size: TMemSize); virtual; abstract;
+    procedure Decode(out Buffer; Size: TMemSize); virtual;
+    procedure DecodeSpecific(out Buffer; Size: TMemSize); virtual; abstract;
   public
     procedure ConstructDecodingTable(const EncodingTable: TBTEEncodingTable); virtual;
     // resulting data size
     Function DecodedSize: TMemSize; virtual; abstract;  // sets properties Padding and Compressed
     //processing
-    Function DecodeIntoBuffer(const Buffer; Size: TMemSize): TMemSize; virtual;
+    Function DecodeIntoBuffer(out Buffer; Size: TMemSize): TMemSize; virtual;
     Function DecodeIntoMemory(Mem: Pointer; Size: TMemSize): TMemSize; overload; virtual;
     Function DecodeIntoMemory(out Mem: Pointer): TMemSize; overload; virtual;
     Function DecodeIntoStream(Stream: TStream): TMemSize; virtual;
@@ -316,7 +316,7 @@ type
   TBase2Decoder = class(TBTEDecoder)
   protected
     procedure InitializeTable; override;
-    procedure DecodeSpecific(const Buffer; Size: TMemSize); override;
+    procedure DecodeSpecific(out Buffer; Size: TMemSize); override;
   public
     class Function DataLimit: TMemSize; override;
     class Function Encoding: TBTEEncoding; override;
@@ -358,7 +358,7 @@ type
   TBase8Decoder = class(TBTEDecoder)
   protected
     procedure InitializeTable; override;
-    procedure DecodeSpecific(const Buffer; Size: TMemSize); override;
+    procedure DecodeSpecific(out Buffer; Size: TMemSize); override;
   public
     class Function DataLimit: TMemSize; override;
     class Function Encoding: TBTEEncoding; override;
@@ -400,7 +400,7 @@ type
   TBase10Decoder = class(TBTEDecoder)
   protected
     procedure InitializeTable; override;
-    procedure DecodeSpecific(const Buffer; Size: TMemSize); override;
+    procedure DecodeSpecific(out Buffer; Size: TMemSize); override;
   public
     class Function DataLimit: TMemSize; override;
     class Function Encoding: TBTEEncoding; override;
@@ -442,7 +442,7 @@ type
   TBase16Decoder = class(TBTEDecoder)
   protected
     procedure InitializeTable; override;
-    procedure DecodeSpecific(const Buffer; Size: TMemSize); override;
+    procedure DecodeSpecific(out Buffer; Size: TMemSize); override;
   public
     class Function DataLimit: TMemSize; override;
     class Function Encoding: TBTEEncoding; override;
@@ -484,7 +484,7 @@ type
   TBase32Decoder = class(TBTEDecoder)
   protected
     procedure InitializeTable; override;
-    procedure DecodeSpecific(const Buffer; Size: TMemSize); override;
+    procedure DecodeSpecific(out Buffer; Size: TMemSize); override;
   public
     class Function DataLimit: TMemSize; override;
     class Function Encoding: TBTEEncoding; override;
@@ -560,7 +560,7 @@ type
   TBase64Decoder = class(TBTEDecoder)
   protected
     procedure InitializeTable; override;
-    procedure DecodeSpecific(const Buffer; Size: TMemSize); override;
+    procedure DecodeSpecific(out Buffer; Size: TMemSize); override;
   public
     class Function DataLimit: TMemSize; override;
     class Function Encoding: TBTEEncoding; override;
@@ -604,7 +604,7 @@ type
   protected
     Function ReadChar: Char; override;
     procedure InitializeTable; override;
-    procedure DecodeSpecific(const Buffer; Size: TMemSize); override;
+    procedure DecodeSpecific(out Buffer; Size: TMemSize); override;
   public
     class Function DataLimit: TMemSize; override;
     class Function Encoding: TBTEEncoding; override;
@@ -648,6 +648,98 @@ type
     class Function EncodingTableLength: Integer; override;
   end;
 
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Procedural interface
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Procedural interface - specialized functions declaration
+===============================================================================}
+
+Function EncodedLength_Base2(const Buffer; Size: TMemSize; Header: Boolean = False): TStrSize;
+Function Encode_Base2(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False): String;
+
+Function DecodedSize_Base2(const EncodedString: String): TMemSize;
+Function Decode_Base2(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+
+//------------------------------------------------------------------------------
+
+Function EncodedLength_Base8(const Buffer; Size: TMemSize; Header: Boolean = False; Padding: Boolean = False): TStrSize;
+Function Encode_Base8(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Padding: Boolean = False): String;
+
+Function DecodedSize_Base8(const EncodedString: String): TMemSize;
+Function Decode_Base8(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+
+//------------------------------------------------------------------------------
+
+Function EncodedLength_Base10(const Buffer; Size: TMemSize; Header: Boolean = False): TStrSize;
+Function Encode_Base10(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False): String;
+
+Function DecodedSize_Base10(const EncodedString: String): TMemSize;
+Function Decode_Base10(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+
+//------------------------------------------------------------------------------
+
+Function EncodedLength_Base16(const Buffer; Size: TMemSize; Header: Boolean = False): TStrSize;
+Function Encode_Base16(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False): String;
+
+Function DecodedSize_Base16(const EncodedString: String): TMemSize;
+Function Decode_Base16(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+
+//------------------------------------------------------------------------------
+
+Function EncodedLength_Base32(const Buffer; Size: TMemSize; Header: Boolean = False; Padding: Boolean = False): TStrSize;
+Function Encode_Base32(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Padding: Boolean = False): String;
+
+Function DecodedSize_Base32(const EncodedString: String): TMemSize;
+Function Decode_Base32(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+
+//------------------------------------------------------------------------------
+
+Function EncodedLength_Base32Hex(const Buffer; Size: TMemSize; Header: Boolean = False; Padding: Boolean = False): TStrSize;
+Function Encode_Base32Hex(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Padding: Boolean = False): String;
+
+Function DecodedSize_Base32Hex(const EncodedString: String): TMemSize;
+Function Decode_Base32Hex(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+
+//------------------------------------------------------------------------------
+
+Function EncodedLength_Base64(const Buffer; Size: TMemSize; Header: Boolean = False; Padding: Boolean = False): TStrSize;
+Function Encode_Base64(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Padding: Boolean = False): String;
+
+Function DecodedSize_Base64(const EncodedString: String): TMemSize;
+Function Decode_Base64(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+
+//------------------------------------------------------------------------------
+
+Function EncodedLength_Base85(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): TStrSize;
+Function Encode_Base85(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): String;
+
+Function DecodedSize_Base85(const EncodedString: String): TMemSize;
+Function Decode_Base85(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+
+//------------------------------------------------------------------------------
+
+Function EncodedLength_ASCII85(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): TStrSize;
+Function Encode_ASCII85(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): String;
+
+Function DecodedSize_ASCII85(const EncodedString: String): TMemSize;
+Function Decode_ASCII85(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+
+{===============================================================================
+    Procedural interface - universal functions declaration
+===============================================================================}
+
+Function EncodedLength(Encoding: TBTEEncoding; const Buffer; Size: TMemSize; Header: Boolean = False;
+  Reversed: Boolean = False; Padding: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): TStrSize;
+Function Encode(Encoding: TBTEEncoding; const Buffer; Size: TMemSize; Header: Boolean = False;
+  Reversed: Boolean = False; Padding: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): String;
+
+Function DecodedSize(Encoding: TBTEEncoding; const EncodedString: String): TMemSize;
+Function Decode(Encoding: TBTEEncoding; const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+
+
 implementation
 
 uses
@@ -669,7 +761,7 @@ const
   BTE_HEADER_ENCODING_BASE85  = 9;
   BTE_HEADER_ENCODING_BASE85A = 10;
 
-  BTE_HEADER_FLAG_REVERSED   = $0100;
+  BTE_HEADER_FLAG_REVERSED = $0100;
 
 //------------------------------------------------------------------------------  
 
@@ -758,6 +850,20 @@ end;
 
 //------------------------------------------------------------------------------
 
+procedure TBTETranscoder.SetReversed(Value: Boolean);
+begin
+If not fIsProcessing then
+  begin
+    If efReversible in EncodingFeatures then
+      fReversed := Value
+    else
+      fReversed := False;
+  end
+else raise EBTEInvalidState.Create('TBTETranscoder.SetReversed: Cannot change settings, transcoder is running.');
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TBTETranscoder.SetPadding(Value: Boolean);
 begin
 If not fIsProcessing then
@@ -828,20 +934,6 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBTETranscoder.SetReversed(Value: Boolean);
-begin
-If not fIsProcessing then
-  begin
-    If efReversible in EncodingFeatures then
-      fReversed := Value
-    else
-      fReversed := False;
-  end
-else raise EBTEInvalidState.Create('TBTETranscoder.SetReversed: Cannot change settings, transcoder is running.');
-end;
-
-//------------------------------------------------------------------------------
-
 procedure TBTETranscoder.DoProgress(Progress: Double);
 begin
 If Assigned(fOnProgressEvent) then
@@ -858,12 +950,12 @@ fEncodedString := '';
 fIsProcessing := False;
 fBreakProcessing := False;
 fHeader := False;
+fReversed := False;
 fPadding := False;
 fPaddingChar := #0;
 fCompression := False;
 fCompressionChar := #0;
 fTrim := False;
-fReversed := False;
 fEncodedStringPos := 0;
 fProgressCoef := 1024;
 fOnProgressEvent := nil;
@@ -1384,7 +1476,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBTEDecoder.Decode(const Buffer; Size: TMemSize);
+procedure TBTEDecoder.Decode(out Buffer; Size: TMemSize);
 begin
 fBreakProcessing := False;
 fIsProcessing := True;
@@ -1423,7 +1515,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function TBTEDecoder.DecodeIntoBuffer(const Buffer; Size: TMemSize): TMemSize;
+Function TBTEDecoder.DecodeIntoBuffer(out Buffer; Size: TMemSize): TMemSize;
 begin
 Result := DecodedSize;
 If Size >= Result then
@@ -1606,7 +1698,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBase2Decoder.DecodeSpecific(const Buffer; Size: TMemSize);
+procedure TBase2Decoder.DecodeSpecific(out Buffer; Size: TMemSize);
 var
   DataPtr:  Pointer;
   i,j:      Integer;
@@ -1827,7 +1919,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBase8Decoder.DecodeSpecific(const Buffer; Size: TMemSize);
+procedure TBase8Decoder.DecodeSpecific(out Buffer; Size: TMemSize);
 var
   DataPtr:        Pointer;
   i:              Integer;
@@ -2038,7 +2130,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBase10Decoder.DecodeSpecific(const Buffer; Size: TMemSize);
+procedure TBase10Decoder.DecodeSpecific(out Buffer; Size: TMemSize);
 var
   DataPtr:  Pointer;
   i,j:      Integer;
@@ -2214,7 +2306,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBase16Decoder.DecodeSpecific(const Buffer; Size: TMemSize);
+procedure TBase16Decoder.DecodeSpecific(out Buffer; Size: TMemSize);
 var
   DataPtr:  Pointer;
   i:        Integer;
@@ -2444,7 +2536,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBase32Decoder.DecodeSpecific(const Buffer; Size: TMemSize);
+procedure TBase32Decoder.DecodeSpecific(out Buffer; Size: TMemSize);
 var
   DataPtr:        Pointer;
   i:              Integer;
@@ -2793,7 +2885,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBase64Decoder.DecodeSpecific(const Buffer; Size: TMemSize);
+procedure TBase64Decoder.DecodeSpecific(out Buffer; Size: TMemSize);
 var
   DataPtr:        Pointer;
   i:              Integer;
@@ -3083,7 +3175,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBase85Decoder.DecodeSpecific(const Buffer; Size: TMemSize);
+procedure TBase85Decoder.DecodeSpecific(out Buffer; Size: TMemSize);
 var
   DataPtr:  Pointer;
   i,j:      Integer;
@@ -3204,6 +3296,7 @@ Function TBase85Decoder.DecodedSize: TMemSize;
     i:  TStrOff;
   begin
     Result := 0;
+    fCompression := False;
     For i := 1 to Length(fEncodedString) do
       begin
         If fEncodedString[i] = fCompressionChar then
@@ -3320,5 +3413,695 @@ Result := Length(EncodingTable_ASCII85);
 end;
 
 
+{===============================================================================
+--------------------------------------------------------------------------------
+                              Procedural interface
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    Procedural interface - specialized functions implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    Procedural interface - Base2 encoding
+-------------------------------------------------------------------------------}
+
+Function EncodedLength_Base2(const Buffer; Size: TMemSize; Header: Boolean = False): TStrSize;
+var
+  Encoder:  TBase2Encoder;
+begin
+Encoder := TBase2Encoder.Create;
+try
+  Encoder.Header := Header;
+  Result := Encoder.EncodedLengthFromBuffer(Buffer,Size);
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Encode_Base2(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False): String;
+var
+  Encoder:  TBase2Encoder;
+begin
+Encoder := TBase2Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Reversed := Reversed;
+  Encoder.EncodeFromBuffer(Buffer,Size);
+  Result := Encoder.EncodedString;
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecodedSize_Base2(const EncodedString: String): TMemSize;
+var
+  Decoder:  TBase2Decoder;
+begin
+Decoder := TBase2Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Result := Decoder.DecodedSize;
+finally
+  Decoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Decode_Base2(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+var
+  Decoder:  TBase2Decoder;
+begin
+Decoder := TBase2Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Decoder.Reversed := Reversed;
+  Result := Decoder.DecodeIntoBuffer(Buffer,Size);
+finally
+  Decoder.Free;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Procedural interface - Base8 encoding
+-------------------------------------------------------------------------------}
+
+Function EncodedLength_Base8(const Buffer; Size: TMemSize; Header: Boolean = False; Padding: Boolean = False): TStrSize;
+var
+  Encoder:  TBase8Encoder;
+begin
+Encoder := TBase8Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Padding := Padding;
+  Result := Encoder.EncodedLengthFromBuffer(Buffer,Size);
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Encode_Base8(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Padding: Boolean = False): String;
+var
+  Encoder:  TBase8Encoder;
+begin
+Encoder := TBase8Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Reversed := Reversed;
+  Encoder.Padding := Padding;
+  Encoder.EncodeFromBuffer(Buffer,Size);
+  Result := Encoder.EncodedString;
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecodedSize_Base8(const EncodedString: String): TMemSize;
+var
+  Decoder:  TBase8Decoder;
+begin
+Decoder := TBase8Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Result := Decoder.DecodedSize;
+finally
+  Decoder.Free;
+end;
+end;
+ 
+//------------------------------------------------------------------------------
+
+Function Decode_Base8(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+var
+  Decoder:  TBase8Decoder;
+begin
+Decoder := TBase8Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Decoder.Reversed := Reversed;
+  Result := Decoder.DecodeIntoBuffer(Buffer,Size);
+finally
+  Decoder.Free;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Procedural interface - Base10 encoding
+-------------------------------------------------------------------------------}
+
+Function EncodedLength_Base10(const Buffer; Size: TMemSize; Header: Boolean = False): TStrSize;
+var
+  Encoder:  TBase10Encoder;
+begin
+Encoder := TBase10Encoder.Create;
+try
+  Encoder.Header := Header;
+  Result := Encoder.EncodedLengthFromBuffer(Buffer,Size);
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Encode_Base10(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False): String;
+var
+  Encoder:  TBase10Encoder;
+begin
+Encoder := TBase10Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Reversed := Reversed;
+  Encoder.EncodeFromBuffer(Buffer,Size);
+  Result := Encoder.EncodedString;
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecodedSize_Base10(const EncodedString: String): TMemSize;
+var
+  Decoder:  TBase10Decoder;
+begin
+Decoder := TBase10Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Result := Decoder.DecodedSize;
+finally
+  Decoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Decode_Base10(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+var
+  Decoder:  TBase10Decoder;
+begin
+Decoder := TBase10Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Decoder.Reversed := Reversed;
+  Result := Decoder.DecodeIntoBuffer(Buffer,Size);
+finally
+  Decoder.Free;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Procedural interface - Base16 encoding
+-------------------------------------------------------------------------------}
+
+Function EncodedLength_Base16(const Buffer; Size: TMemSize; Header: Boolean = False): TStrSize;
+var
+  Encoder:  TBase16Encoder;
+begin
+Encoder := TBase16Encoder.Create;
+try
+  Encoder.Header := Header;
+  Result := Encoder.EncodedLengthFromBuffer(Buffer,Size);
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Encode_Base16(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False): String;
+var
+  Encoder:  TBase16Encoder;
+begin
+Encoder := TBase16Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Reversed := Reversed;
+  Encoder.EncodeFromBuffer(Buffer,Size);
+  Result := Encoder.EncodedString;
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecodedSize_Base16(const EncodedString: String): TMemSize;
+var
+  Decoder:  TBase16Decoder;
+begin
+Decoder := TBase16Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Result := Decoder.DecodedSize;
+finally
+  Decoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Decode_Base16(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+var
+  Decoder:  TBase16Decoder;
+begin
+Decoder := TBase16Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Decoder.Reversed := Reversed;
+  Result := Decoder.DecodeIntoBuffer(Buffer,Size);
+finally
+  Decoder.Free;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Procedural interface - Base32 encoding
+-------------------------------------------------------------------------------}
+
+Function EncodedLength_Base32(const Buffer; Size: TMemSize; Header: Boolean = False; Padding: Boolean = False): TStrSize;
+var
+  Encoder:  TBase32Encoder;
+begin
+Encoder := TBase32Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Padding := Padding;
+  Result := Encoder.EncodedLengthFromBuffer(Buffer,Size);
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Encode_Base32(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Padding: Boolean = False): String;
+var
+  Encoder:  TBase32Encoder;
+begin
+Encoder := TBase32Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Reversed := Reversed;
+  Encoder.Padding := Padding;
+  Encoder.EncodeFromBuffer(Buffer,Size);
+  Result := Encoder.EncodedString;
+finally
+  Encoder.Free;
+end;
+end;
+ 
+//------------------------------------------------------------------------------
+
+Function DecodedSize_Base32(const EncodedString: String): TMemSize;
+var
+  Decoder:  TBase32Decoder;
+begin
+Decoder := TBase32Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Result := Decoder.DecodedSize;
+finally
+  Decoder.Free;
+end;
+end;
+ 
+//------------------------------------------------------------------------------
+
+Function Decode_Base32(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+var
+  Decoder:  TBase32Decoder;
+begin
+Decoder := TBase32Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Decoder.Reversed := Reversed;
+  Result := Decoder.DecodeIntoBuffer(Buffer,Size);
+finally
+  Decoder.Free;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Procedural interface - Base32Hex encoding
+-------------------------------------------------------------------------------}
+
+Function EncodedLength_Base32Hex(const Buffer; Size: TMemSize; Header: Boolean = False; Padding: Boolean = False): TStrSize;
+var
+  Encoder:  TBase32HexEncoder;
+begin
+Encoder := TBase32HexEncoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Padding := Padding;
+  Result := Encoder.EncodedLengthFromBuffer(Buffer,Size);
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Encode_Base32Hex(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Padding: Boolean = False): String;
+var
+  Encoder:  TBase32HexEncoder;
+begin
+Encoder := TBase32HexEncoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Reversed := Reversed;
+  Encoder.Padding := Padding;
+  Encoder.EncodeFromBuffer(Buffer,Size);
+  Result := Encoder.EncodedString;
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecodedSize_Base32Hex(const EncodedString: String): TMemSize;
+var
+  Decoder:  TBase32HexDecoder;
+begin
+Decoder := TBase32HexDecoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Result := Decoder.DecodedSize;
+finally
+  Decoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Decode_Base32Hex(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+var
+  Decoder:  TBase32HexDecoder;
+begin
+Decoder := TBase32HexDecoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Decoder.Reversed := Reversed;
+  Result := Decoder.DecodeIntoBuffer(Buffer,Size);
+finally
+  Decoder.Free;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Procedural interface - Base64 encoding
+-------------------------------------------------------------------------------}
+
+Function EncodedLength_Base64(const Buffer; Size: TMemSize; Header: Boolean = False; Padding: Boolean = False): TStrSize;
+var
+  Encoder:  TBase64Encoder;
+begin
+Encoder := TBase64Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Padding := Padding;
+  Result := Encoder.EncodedLengthFromBuffer(Buffer,Size);
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Encode_Base64(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Padding: Boolean = False): String;
+var
+  Encoder:  TBase64Encoder;
+begin
+Encoder := TBase64Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Reversed := Reversed;
+  Encoder.Padding := Padding;
+  Encoder.EncodeFromBuffer(Buffer,Size);
+  Result := Encoder.EncodedString;
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecodedSize_Base64(const EncodedString: String): TMemSize;
+var
+  Decoder:  TBase64Decoder;
+begin
+Decoder := TBase64Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Result := Decoder.DecodedSize;
+finally
+  Decoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Decode_Base64(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+var
+  Decoder:  TBase64Decoder;
+begin
+Decoder := TBase64Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Decoder.Reversed := Reversed;
+  Result := Decoder.DecodeIntoBuffer(Buffer,Size);
+finally
+  Decoder.Free;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Procedural interface - Base85 encoding
+-------------------------------------------------------------------------------}
+
+Function EncodedLength_Base85(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): TStrSize;
+var
+  Encoder:  TBase85Encoder;
+begin
+Encoder := TBase85Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Reversed := Reversed;
+  Encoder.Compression := Compression;
+  Encoder.Trim := Trim;
+  Result := Encoder.EncodedLengthFromBuffer(Buffer,Size);
+finally
+  Encoder.Free;
+end;
+end;
+ 
+//------------------------------------------------------------------------------
+
+Function Encode_Base85(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): String;
+var
+  Encoder:  TBase85Encoder;
+begin
+Encoder := TBase85Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Reversed := Reversed;
+  Encoder.Compression := Compression;
+  Encoder.Trim := Trim;
+  Encoder.EncodeFromBuffer(Buffer,Size);
+  Result := Encoder.EncodedString;
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecodedSize_Base85(const EncodedString: String): TMemSize;
+var
+  Decoder:  TBase85Decoder;
+begin
+Decoder := TBase85Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Result := Decoder.DecodedSize;
+finally
+  Decoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Decode_Base85(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+var
+  Decoder:  TBase85Decoder;
+begin
+Decoder := TBase85Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Decoder.Reversed := Reversed;
+  Result := Decoder.DecodeIntoBuffer(Buffer,Size);
+finally
+  Decoder.Free;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Procedural interface - ASCII85 encoding
+-------------------------------------------------------------------------------}
+
+Function EncodedLength_ASCII85(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): TStrSize;
+var
+  Encoder:  TASCII85Encoder;
+begin
+Encoder := TASCII85Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Reversed := Reversed;
+  Encoder.Compression := Compression;
+  Encoder.Trim := Trim;
+  Result := Encoder.EncodedLengthFromBuffer(Buffer,Size);
+finally
+  Encoder.Free;
+end;
+end;
+ 
+//------------------------------------------------------------------------------
+
+Function Encode_ASCII85(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): String;
+var
+  Encoder:  TASCII85Encoder;
+begin
+Encoder := TASCII85Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Reversed := Reversed;
+  Encoder.Compression := Compression;
+  Encoder.Trim := Trim;
+  Encoder.EncodeFromBuffer(Buffer,Size);
+  Result := Encoder.EncodedString;
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecodedSize_ASCII85(const EncodedString: String): TMemSize;
+var
+  Decoder:  TASCII85Decoder;
+begin
+Decoder := TASCII85Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Result := Decoder.DecodedSize;
+finally
+  Decoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Decode_ASCII85(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+var
+  Decoder:  TASCII85Decoder;
+begin
+Decoder := TASCII85Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Decoder.Reversed := Reversed;
+  Result := Decoder.DecodeIntoBuffer(Buffer,Size);
+finally
+  Decoder.Free;
+end;
+end;
+
+{===============================================================================
+    Procedural interface - universal functions implementation
+===============================================================================}
+
+Function EncodedLength(Encoding: TBTEEncoding; const Buffer; Size: TMemSize; Header: Boolean = False;
+  Reversed: Boolean = False; Padding: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): TStrSize;
+begin
+case Encoding of
+  encBase2:     Result := EncodedLength_Base2(Buffer,Size,Header);
+  encBase8:     Result := EncodedLength_Base8(Buffer,Size,Header,Padding);
+  encBase10:    Result := EncodedLength_Base10(Buffer,Size,Header);
+  encBase16:    Result := EncodedLength_Base16(Buffer,Size,Header);
+  encBase32:    Result := EncodedLength_Base32(Buffer,Size,Header,Padding);
+  encBase32Hex: Result := EncodedLength_Base32Hex(Buffer,Size,Header,Padding);
+  encBase64:    Result := EncodedLength_Base64(Buffer,Size,Header,Padding);
+  encBase85:    Result := EncodedLength_Base85(Buffer,Size,Header,Reversed,Compression,Trim);
+  encASCII85:   Result := EncodedLength_ASCII85(Buffer,Size,Header,Reversed,Compression,Trim);
+else
+  raise EBTEInvalidValue.CreateFmt('EncodedLength: Unknown encoding (%d).',[Ord(Encoding)]);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Encode(Encoding: TBTEEncoding; const Buffer; Size: TMemSize; Header: Boolean = False;
+  Reversed: Boolean = False; Padding: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): String;
+begin
+case Encoding of
+  encBase2:     Result := Encode_Base2(Buffer,Size,Header,Reversed);
+  encBase8:     Result := Encode_Base8(Buffer,Size,Header,Reversed,Padding);
+  encBase10:    Result := Encode_Base10(Buffer,Size,Header,Reversed);
+  encBase16:    Result := Encode_Base16(Buffer,Size,Header,Reversed);
+  encBase32:    Result := Encode_Base32(Buffer,Size,Header,Reversed,Padding);
+  encBase32Hex: Result := Encode_Base32Hex(Buffer,Size,Header,Reversed,Padding);
+  encBase64:    Result := Encode_Base64(Buffer,Size,Header,Reversed,Padding);
+  encBase85:    Result := Encode_Base85(Buffer,Size,Header,Reversed,Compression,Trim);
+  encASCII85:   Result := Encode_ASCII85(Buffer,Size,Header,Reversed,Compression,Trim);
+else
+  raise EBTEInvalidValue.CreateFmt('Encode: Unknown encoding (%d).',[Ord(Encoding)]);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecodedSize(Encoding: TBTEEncoding; const EncodedString: String): TMemSize;
+begin
+case Encoding of
+  encBase2:     Result := DecodedSize_Base2(EncodedString);
+  encBase8:     Result := DecodedSize_Base8(EncodedString);
+  encBase10:    Result := DecodedSize_Base10(EncodedString);
+  encBase16:    Result := DecodedSize_Base16(EncodedString);
+  encBase32:    Result := DecodedSize_Base32(EncodedString);
+  encBase32Hex: Result := DecodedSize_Base32Hex(EncodedString);
+  encBase64:    Result := DecodedSize_Base64(EncodedString);
+  encBase85:    Result := DecodedSize_Base85(EncodedString);
+  encASCII85:   Result := DecodedSize_ASCII85(EncodedString);
+else
+  raise EBTEInvalidValue.CreateFmt('DecodedSize: Unknown encoding (%d).',[Ord(Encoding)]);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Decode(Encoding: TBTEEncoding; const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+begin
+case Encoding of
+  encBase2:     Result := Decode_Base2(EncodedString,Buffer,Size,Reversed);
+  encBase8:     Result := Decode_Base8(EncodedString,Buffer,Size,Reversed);
+  encBase10:    Result := Decode_Base10(EncodedString,Buffer,Size,Reversed);
+  encBase16:    Result := Decode_Base16(EncodedString,Buffer,Size,Reversed);
+  encBase32:    Result := Decode_Base32(EncodedString,Buffer,Size,Reversed);
+  encBase32Hex: Result := Decode_Base32(EncodedString,Buffer,Size,Reversed);
+  encBase64:    Result := Decode_Base64(EncodedString,Buffer,Size,Reversed);
+  encBase85:    Result := Decode_Base85(EncodedString,Buffer,Size,Reversed);
+  encASCII85:   Result := Decode_ASCII85(EncodedString,Buffer,Size,Reversed);
+else
+  raise EBTEInvalidValue.CreateFmt('Decode: Unknown encoding (%d).',[Ord(Encoding)]);
+end;
+end;
 
 end.
