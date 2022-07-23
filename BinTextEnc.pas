@@ -29,16 +29,9 @@ unit BinTextEnc;
 
 {$IFDEF FPC}
   {$MODE ObjFPC}
-  {$INLINE ON}
-  {$DEFINE CanInline}
+  {$MODESWITCH DuplicateLocals+}
   {$DEFINE FPC_DisableWarns}
   {$MACRO ON}
-{$ELSE}
-  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
-    {$DEFINE CanInline}
-  {$ELSE}
-    {$UNDEF CanInline}
-  {$IFEND}  
 {$ENDIF}
 {$H+}
 
@@ -65,11 +58,20 @@ type
 --------------------------------------------------------------------------------
 ===============================================================================}
 type
-{$message 'add base4'}
-  TBTEEncoding = (encUnknown,encBase2,encBase8,encBase10,encBase16,encBase32,
-                  encBase32Hex,encBase64,encBase85,encASCII85);
+  TBTEEncoding = (encUnknown,encBase2,encBase4,encBase8,encBase10,encBase16,
+                  encBase32,encBase32Hex,encBase64,encBase85,encASCII85);
 
-  TBTEEncodingFeature = (efPadding,efReversible,efCompression,efTrim,
+{
+  efReversible        encoding supports reversed data reading
+  efPadding           encoding supports padding
+  efCompression       encoding supports compression
+  efTrim              encoding supports trimming
+  efOutputSize        it is possible to obtain length of encoded string or size
+                      of decoded data
+  efSlowOutputSize    same as efOutputSize, bot the data/string must be scanned
+                      to obtain the value, and is therefore slow(er)
+}
+  TBTEEncodingFeature = (efReversible,efPadding,efCompression,efTrim,
                          efOutputSize,efSlowOutputSize);
 
   TBTEEncodingFeatures = set of TBTEEncodingFeature;
@@ -149,9 +151,9 @@ type
     EncodingFeatures returns set of fetures the particular encoder or decoder
     is supporting.
 
-    To test for support of a particular feature, use the "in" set operator.
-    If the feature is supported, then the enumeration values will be included,
-    otherwise the value will not be included in the returned set.
+    To test for support of specific feature, use the "in" set operator.
+    If the feature is supported, then the appropriate enumeration values will
+    be included, otherwise the value will not be included in the returned set.
 
     See decription of type TBTEEncoding for detailed description of indvidual
     features.
@@ -166,7 +168,7 @@ type
     HeaderLength returns length, in characters, of the header that can be
     stored at the beginning of encoded strings.
 
-    It always returns 6.
+    It will always return 6.
   }
     class Function HeaderLength: TStrSize; virtual;
   {
@@ -192,8 +194,8 @@ type
     EncodingTableIsValid checs validity of passed encoding table.
 
     It checks length of the table, ordinal values of all characters (must be
-    below or equal to 127), and no character is allowed to repeat. Note that
-    some encodings might require stricter rules, they are then checked too.
+    below or equal to 127), and that no character repeats. Note that some
+    encodings might require stricter rules, they are then checked too.
   }
     class Function EncodingTableIsValid(const EncodingTable: TBTEEncodingTable): Boolean; virtual;
     constructor Create;
@@ -202,12 +204,90 @@ type
     // properties
     property EncodedString: String read GetEncodedString write SetEncodedString;
     property IsProcessing: Boolean read fIsProcessing;
+  {
+    Encoder
+
+      When set to true, the encoded string will start with a header sequence
+      that stores used encoding scheme and some other encoding options (namely
+      reversed flag).
+
+    Decoder
+
+      Read-only property (can be set to a different value, but that is of no
+      use).
+      Value of this property is set when decoding or when obtaining decoded
+      size. It is set to true when the encoded string contained a valid header,
+      false otherwise.
+  }
     property Header: Boolean read fHeader write SetHeader;
+  {
+    Encoder
+
+      When set to true, then the data being encoded are read in reverse (from
+      the last byte/block to the first). When false, reading is done in normal
+      order (from first byte/block to last).
+
+    Decoder
+
+      If the encoded string contains a valid header, then this value is set
+      according to a reverse flag in this header (true when the flag is set,
+      false otherwise).
+      If you use encoded string that does NOT contain a header, then you must
+      set this property to a value used during encoding, otherwise the decoded
+      data will be completely wrong.
+  }
     property Reversed: Boolean read fReversed write SetReversed;
+  {
+    Encoder
+
+      When set to true, and when the encoding supports padding, then the
+      produced encoded string will be padded (missing characters at the end
+      replaced by PaddingCharacter) to certain length.
+
+    Decoder
+
+      Read-only property.
+      Value is set when decoding or when obtaining decoded size. It is set to
+      true when the encoded string ends with one or more PaddingCharacter,
+      false otherwise.
+      Note that this does not reflect whether padding was active during
+      encoding, only whether there is padding character(s) or not.
+  }
     property Padding: Boolean read fPadding write SetPadding;
     property PaddingCharacter: Char read fPaddingChar write SetPaddingChar;
+  {
+    Encoder
+
+      When set to true, and when the encoding supports compression, then some
+      of the encoded data can be compressed when encoding.
+
+    Decoder
+
+      Read-only property.
+      Value is set when decoding or when obtaining decoded size. It is set to
+      true when the encoded string contains one or more CompressionCharacter,
+      false otherwise.
+      Note that this does not reflect whether compression was active during
+      encoding, only whether there is compression character(s) or not.
+  }
     property Compression: Boolean read fCompression write SetCompression;
     property CompressionCharacter: Char read fCompressionChar write SetCompressionChar;
+  {
+    Encoder
+
+      When set to true, and when the encoding supports trimming, then some
+      the resulting encoded string might be shortened by characters that are
+      not carrying any information about the encoded data.
+
+    Decoder
+
+      Read-only property.
+      Value is set when decoding or when obtaining decoded size. It is set to
+      true when the encoded string seems to be trimmed (is shorter than is
+      expected), false otherwise.
+      Note that this does not reflect whether trimming was active during
+      encoding, only whether there are some missing characters.
+  }
     property Trim: Boolean read fTrim write SetTrim;
     property ProgressCoefficient: Integer read fProgressCoef write fProgressCoef;
     property OnProgressEvent: TFloatEvent read fOnProgressEvent write fOnProgressEvent;
@@ -314,6 +394,48 @@ type
 ===============================================================================}
 type
   TBase2Decoder = class(TBTEDecoder)
+  protected
+    procedure InitializeTable; override;
+    procedure DecodeSpecific(out Buffer; Size: TMemSize); override;
+  public
+    class Function DataLimit: TMemSize; override;
+    class Function Encoding: TBTEEncoding; override;
+    class Function EncodingFeatures: TBTEEncodingFeatures; override;
+    class Function EncodingTableLength: Integer; override;
+    Function DecodedSize: TMemSize; override;
+  end;
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                 TBase4Encoder
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TBase4Encoder - class declaration
+===============================================================================}
+type
+  TBase4Encoder = class(TBTEEncoder)
+  protected
+    procedure InitializeTable; override;
+    procedure EncodeSpecific(const Buffer; Size: TMemSize); override;
+  public
+    class Function DataLimit: TMemSize; override;
+    class Function Encoding: TBTEEncoding; override;
+    class Function EncodingFeatures: TBTEEncodingFeatures; override;
+    class Function EncodingTableLength: Integer; override;
+    Function EncodedLengthFromBuffer(const Buffer; Size: TMemSize): TStrSize; override;
+  end;
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                 TBase4Decoder
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TBase4Decoder - class declaration
+===============================================================================}
+type
+  TBase4Decoder = class(TBTEDecoder)
   protected
     procedure InitializeTable; override;
     procedure DecodeSpecific(out Buffer; Size: TMemSize); override;
@@ -665,6 +787,14 @@ Function Decode_Base2(const EncodedString: String; out Buffer; Size: TMemSize; R
 
 //------------------------------------------------------------------------------
 
+Function EncodedLength_Base4(const Buffer; Size: TMemSize; Header: Boolean = False): TStrSize;
+Function Encode_Base4(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False): String;
+
+Function DecodedSize_Base4(const EncodedString: String): TMemSize;
+Function Decode_Base4(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+
+//------------------------------------------------------------------------------
+
 Function EncodedLength_Base8(const Buffer; Size: TMemSize; Header: Boolean = False; Padding: Boolean = False): TStrSize;
 Function Encode_Base8(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Padding: Boolean = False): String;
 
@@ -736,9 +866,20 @@ Function EncodedLength(Encoding: TBTEEncoding; const Buffer; Size: TMemSize; Hea
 Function Encode(Encoding: TBTEEncoding; const Buffer; Size: TMemSize; Header: Boolean = False;
   Reversed: Boolean = False; Padding: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): String;
 
-Function DecodedSize(Encoding: TBTEEncoding; const EncodedString: String): TMemSize;
-Function Decode(Encoding: TBTEEncoding; const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+Function DecodedSize(Encoding: TBTEEncoding; const EncodedString: String): TMemSize; overload;
+{
+  Buffer must be already allocated to accommodate all data (pass allocated size
+  in Size parameter). To get the required size, use function DecodedSize.
+}
+Function Decode(Encoding: TBTEEncoding; const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize; overload;
 
+//------------------------------------------------------------------------------
+
+// retuns encUnknown if the string does not contain a valid header
+Function HeaderEncoding(const EncodedString: String): TBTEEncoding;
+
+Function DecodedSize(const EncodedString: String): TMemSize; overload;
+Function Decode(const EncodedString: String; out Buffer; Size: TMemSize): TMemSize; overload;
 
 implementation
 
@@ -746,12 +887,20 @@ uses
   Math,
   StrRect;
 
+{$IFDEF FPC_DisableWarns}
+  {$DEFINE FPCDWM}
+  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
+  {$DEFINE W4056:={$WARN 4056 OFF}} // Conversion between ordinals and pointers is not portable
+  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
+{$ENDIF}
+
 {===============================================================================
     Implementation constants and functions
 ===============================================================================}
 // constants for encoded string headers
 const
   BTE_HEADER_ENCODING_BASE2   = 1;
+  BTE_HEADER_ENCODING_BASE4   = 2;
   BTE_HEADER_ENCODING_BASE8   = 3;
   BTE_HEADER_ENCODING_BASE10  = 4;
   BTE_HEADER_ENCODING_BASE16  = 5;
@@ -779,20 +928,24 @@ end;
 
 Function ResolveDataPointer(Ptr: Pointer; Size: TMemSize; Reversed: Boolean; RevOffset: UInt32 = 1): Pointer;
 begin
+{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
 If Reversed then
   Result := Pointer(PtrUInt(Ptr) + (PtrUInt(Size) - PtrUInt(RevOffset)))
 else
   Result := Ptr;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
 
 procedure AdvanceDataPointer(var Ptr: Pointer; Reversed: Boolean; Delta: TMemSize = 1);
 begin
+{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
 If Reversed then
   Ptr := Pointer(PtrUInt(Ptr) - Delta)
 else
   Ptr := Pointer(PtrUInt(Ptr) + Delta);
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -1062,6 +1215,7 @@ begin
 If HeaderNumberExtract(EncodedString,HeaderNumber) then
   case HeaderNumber and $7F of
     BTE_HEADER_ENCODING_BASE2:    Result := encBase2;
+    BTE_HEADER_ENCODING_BASE4:    Result := encBase4;
     BTE_HEADER_ENCODING_BASE8:    Result := encBase8;
     BTE_HEADER_ENCODING_BASE10:   Result := encBase10;
     BTE_HEADER_ENCODING_BASE16:   Result := encBase16;
@@ -1190,6 +1344,7 @@ procedure TBTEEncoder.WriteHeader;
     // encoding number
     case Encoding of
       encBase2:       Result := BTE_HEADER_ENCODING_BASE2;
+      encBase4:       Result := BTE_HEADER_ENCODING_BASE4;
       encBase8:       Result := BTE_HEADER_ENCODING_BASE8;
       encBase10:      Result := BTE_HEADER_ENCODING_BASE10;
       encBase16:      Result := BTE_HEADER_ENCODING_BASE16;
@@ -1223,7 +1378,7 @@ If fEncodedStringPos <= Length(fEncodedString) then
     fEncodedString[fEncodedStringPos] := C;
     Inc(fEncodedStringPos);
   end
-else raise EBTEProcessingError.Create('TBTEEncoder.WriteChar: Invalid string position.',);
+else raise EBTEProcessingError.Create('TBTEEncoder.WriteChar: Invalid string position.');
 end;
 
 //------------------------------------------------------------------------------
@@ -1296,7 +1451,9 @@ If Assigned(Stream) then
                   FreeMem(Buffer,Count);
                 end;              
               end
+          {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
             else Result := EncodedLengthFromBuffer(Pointer(PtrUInt(TCustomMemoryStream(Stream).Memory) + PtrUInt(Stream.Position))^,TMemSize(Count));
+          {$IFDEF FPCDWM}{$POP}{$ENDIF}
           end
         else Result := EncodedLengthFromBuffer(nil^,TMemSize(Count));
       end
@@ -1368,7 +1525,9 @@ If Assigned(Stream) then
               FreeMem(Buffer,Count);
             end;
           end
+      {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
         else Encode(Pointer(PtrUInt(TCustomMemoryStream(Stream).Memory) + PtrUInt(Stream.Position))^,TMemSize(Count));
+      {$IFDEF FPCDWM}{$POP}{$ENDIF}
       end
     else raise EBTETooMuchData.CreateFmt('TBTEEncoder.EncodeFromStream: Too much data (%d bytes).',[Stream.Size]);
   end
@@ -1434,7 +1593,7 @@ If fEncodedStringPos <= Length(fEncodedString) then
     Result := fEncodedString[fEncodedStringPos];
     Inc(fEncodedStringPos);
   end
-else raise EBTEProcessingError.Create('TBTEDecoder.ReadChar: Invalid string position.',);
+else raise EBTEProcessingError.Create('TBTEDecoder.ReadChar: Invalid string position.');
 end;
 
 //------------------------------------------------------------------------------
@@ -1444,7 +1603,7 @@ begin
 If fEncodedStringPos > 1 then
   Dec(fEncodedStringPos)
 else
-  raise EBTEProcessingError.Create('TBTEDecoder.RollBack: Invalid string position.',);
+  raise EBTEProcessingError.Create('TBTEDecoder.RollBack: Invalid string position.');
 end;
 
 //------------------------------------------------------------------------------
@@ -1655,6 +1814,7 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function TBase2Encoder.EncodedLengthFromBuffer(const Buffer; Size: TMemSize): TStrSize;
 begin
 If Size <= DataLimit then
@@ -1666,6 +1826,7 @@ If Size <= DataLimit then
   end
 else raise EBTETooMuchData.CreateFmt('TBase2Encoder.EncodedLengthFromBuffer: Too much data (%u bytes).',[Size]);
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {===============================================================================
@@ -1755,6 +1916,182 @@ If HeaderPresent(fEncodedString) then
   Result := TMemSize((Length(fEncodedString) - HeaderLength) div 8)
 else
   Result := TMemSize(Length(fEncodedString) div 8)
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                 TBase4Encoder
+--------------------------------------------------------------------------------
+===============================================================================}
+const
+  EncodingTable_Base4: array[0..3] of Char = ('0','1','2','3');
+
+{===============================================================================
+    TBase4Encoder - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TBase4Encoder - protected methods
+-------------------------------------------------------------------------------}
+
+procedure TBase4Encoder.InitializeTable;
+begin
+AssignEncodingTable(EncodingTable_Base4);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TBase4Encoder.EncodeSpecific(const Buffer; Size: TMemSize);
+var
+  DataPtr:  Pointer;
+  i,j:      Integer;
+  Temp:     Byte;
+begin
+DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+For i := 1 to Size do
+  begin
+    Temp := PByte(DataPtr)^;
+    For j := 3 downto 0 do
+      WriteChar(fEncodingTable[(Temp shr (j * 2)) and 3]);
+    If fBreakProcessing then
+      Break{For i};
+    AdvanceDataPointer(DataPtr,fReversed);
+  end;
+end;
+
+{-------------------------------------------------------------------------------
+    TBase4Encoder - public methods
+-------------------------------------------------------------------------------}
+
+class Function TBase4Encoder.DataLimit: TMemSize;
+begin
+Result := 128 * 1024 * 1024;  // 128MiB
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TBase4Encoder.Encoding: TBTEEncoding;
+begin
+Result := encBase4;
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TBase4Encoder.EncodingFeatures: TBTEEncodingFeatures;
+begin
+Result := [efReversible,efOutputSize];
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TBase4Encoder.EncodingTableLength: Integer;
+begin
+Result := Length(EncodingTable_Base4);
+end;
+
+//------------------------------------------------------------------------------
+
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
+Function TBase4Encoder.EncodedLengthFromBuffer(const Buffer; Size: TMemSize): TStrSize;
+begin
+If Size <= DataLimit then
+  begin
+    If fHeader then
+      Result := TStrSize(Size * 4) + HeaderLength
+    else
+      Result := TStrSize(Size * 4);
+  end
+else raise EBTETooMuchData.CreateFmt('TBase4Encoder.EncodedLengthFromBuffer: Too much data (%u bytes).',[Size]);
+end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                 TBase4Decoder
+--------------------------------------------------------------------------------
+===============================================================================}
+const
+  DecodingTable_Base4: TBTEDecodingTable =
+    ($FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF,
+     $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF,
+     $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF,
+     $00, $01, $02, $03, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF,
+     $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF,
+     $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF,
+     $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF,
+     $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF);
+
+{===============================================================================
+    TBase4Decoder - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TBase4Decoder - protected methods
+-------------------------------------------------------------------------------}
+
+procedure TBase4Decoder.InitializeTable;
+begin
+fDecodingTable := DecodingTable_Base4;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TBase4Decoder.DecodeSpecific(out Buffer; Size: TMemSize);
+var
+  DataPtr:  Pointer;
+  i,j:      Integer;
+  Temp:     Byte;
+begin
+DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+For i := 1 to Size do
+  begin
+    Temp := 0;
+    For j := 1 to 4 do
+      Temp := (Temp shl 2) or ResolveChar(ReadChar);
+    If fBreakProcessing then
+      Break{For i};
+    PByte(DataPtr)^ := Temp;
+    AdvanceDataPointer(DataPtr,fReversed);
+  end;
+end;
+
+{-------------------------------------------------------------------------------
+    TBase4Decoder - public methods
+-------------------------------------------------------------------------------}
+
+class Function TBase4Decoder.DataLimit: TMemSize;
+begin
+Result := 128 * 1024 * 1024;  // 128MiB
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TBase4Decoder.Encoding: TBTEEncoding;
+begin
+Result := encBase4;
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TBase4Decoder.EncodingFeatures: TBTEEncodingFeatures;
+begin
+Result := [efReversible,efOutputSize];
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TBase4Decoder.EncodingTableLength: Integer;
+begin
+Result := Length(EncodingTable_Base4);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TBase4Decoder.DecodedSize: TMemSize;
+begin
+If HeaderPresent(fEncodedString) then
+  Result := TMemSize((Length(fEncodedString) - HeaderLength) div 4)
+else
+  Result := TMemSize(Length(fEncodedString) div 4)
 end;
 
 
@@ -1861,7 +2198,7 @@ end;
 
 class Function TBase8Encoder.EncodingFeatures: TBTEEncodingFeatures;
 begin
-Result := [efPadding,efReversible,efOutputSize];
+Result := [efReversible,efPadding,efOutputSize];
 end;
 
 //------------------------------------------------------------------------------
@@ -1873,6 +2210,7 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function TBase8Encoder.EncodedLengthFromBuffer(const Buffer; Size: TMemSize): TStrSize;
 begin
 If Size <= DataLimit then
@@ -1886,6 +2224,7 @@ If Size <= DataLimit then
   end
 else raise EBTETooMuchData.CreateFmt('TBase8Encoder.EncodedLengthFromBuffer: Too much data (%u bytes).',[Size]);
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {===============================================================================
@@ -1985,7 +2324,7 @@ end;
 
 class Function TBase8Decoder.EncodingFeatures: TBTEEncodingFeatures;
 begin
-Result := [efPadding,efReversible,efOutputSize];
+Result := [efReversible,efPadding,efOutputSize];
 end;
 
 //------------------------------------------------------------------------------
@@ -2087,6 +2426,7 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function TBase10Encoder.EncodedLengthFromBuffer(const Buffer; Size: TMemSize): TStrSize;
 begin
 If Size <= DataLimit then
@@ -2098,6 +2438,7 @@ If Size <= DataLimit then
   end
 else raise EBTETooMuchData.CreateFmt('TBase10Encoder.EncodedLengthFromBuffer: Too much data (%u bytes).',[Size]);
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {===============================================================================
@@ -2263,6 +2604,7 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function TBase16Encoder.EncodedLengthFromBuffer(const Buffer; Size: TMemSize): TStrSize;
 begin
 If Size <= DataLimit then
@@ -2274,6 +2616,7 @@ If Size <= DataLimit then
   end
 else raise EBTETooMuchData.CreateFmt('TBase16Encoder.EncodedLengthFromBuffer: Too much data (%u bytes).',[Size]);
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {===============================================================================
@@ -2478,7 +2821,7 @@ end;
 
 class Function TBase32Encoder.EncodingFeatures: TBTEEncodingFeatures;
 begin
-Result := [efPadding,efReversible,efOutputSize];
+Result := [efReversible,efPadding,efOutputSize];
 end;
 
 //------------------------------------------------------------------------------
@@ -2490,6 +2833,7 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function TBase32Encoder.EncodedLengthFromBuffer(const Buffer; Size: TMemSize): TStrSize;
 begin
 If Size <= DataLimit then
@@ -2503,6 +2847,7 @@ If Size <= DataLimit then
   end
 else raise EBTETooMuchData.CreateFmt('TBase32Encoder.EncodedLengthFromBuffer: Too much data (%u bytes).',[Size]);
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {===============================================================================
@@ -2613,7 +2958,7 @@ end;
 
 class Function TBase32Decoder.EncodingFeatures: TBTEEncodingFeatures;
 begin
-Result := [efPadding,efReversible,efOutputSize];
+Result := [efReversible,efPadding,efOutputSize];
 end;
 
 //------------------------------------------------------------------------------
@@ -2827,7 +3172,7 @@ end;
 
 class Function TBase64Encoder.EncodingFeatures: TBTEEncodingFeatures;
 begin
-Result := [efPadding,efReversible,efOutputSize];
+Result := [efReversible,efPadding,efOutputSize];
 end;
 
 //------------------------------------------------------------------------------
@@ -2839,6 +3184,7 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 Function TBase64Encoder.EncodedLengthFromBuffer(const Buffer; Size: TMemSize): TStrSize;
 begin
 If Size <= DataLimit then
@@ -2852,6 +3198,7 @@ If Size <= DataLimit then
   end
 else raise EBTETooMuchData.CreateFmt('TBase64Encoder.EncodedLengthFromBuffer: Too much data (%u bytes).',[Size]);
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 
 {===============================================================================
@@ -2948,7 +3295,7 @@ end;
 
 class Function TBase64Decoder.EncodingFeatures: TBTEEncodingFeatures;
 begin
-Result := [efPadding,efReversible,efOutputSize];
+Result := [efReversible,efPadding,efOutputSize];
 end;
 
 //------------------------------------------------------------------------------
@@ -3022,8 +3369,10 @@ For i := 1 to Ceil(Size / 4) do
         // partial word
         Temp := 0;
         If fReversed then
+        {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
           Move(Pointer(PtrUInt(DataPtr) + PtrUInt(4 - (Size mod 4)))^,
                Pointer(PtrUInt(@Temp) + PtrUInt(4 - (Size mod 4)))^,Size mod 4)
+        {$IFDEF FPCDWM}{$POP}W4055{$ENDIF}
         else
           Move(DataPtr^,Temp,Size mod 4);
       end
@@ -3069,7 +3418,7 @@ end;
 
 class Function TBase85Encoder.EncodingFeatures: TBTEEncodingFeatures;
 begin
-Result := [efCompression,efTrim,efReversible,efSlowOutputSize];
+Result := [efReversible,efCompression,efTrim,efSlowOutputSize];
 end;
 
 //------------------------------------------------------------------------------
@@ -3197,10 +3546,10 @@ For i := 1 to Ceil(Size / 4) do
             For j := 0 to (Size mod 4) do
               begin
                 C := ReadChar;
-                Temp64 := Temp64 + (ResolveChar(C) * Coefficients_Base85[j]);
+                Temp64 := Temp64 + (Int64(ResolveChar(C)) * Coefficients_Base85[j]);
               end;
             For j := Succ(Size mod 4) to 4 do
-              Temp64 := Temp64 + (84 * Coefficients_Base85[j]);
+              Temp64 := Temp64 + (Int64(84) * Coefficients_Base85[j]);
           end
         else
           begin
@@ -3208,7 +3557,7 @@ For i := 1 to Ceil(Size / 4) do
             For j := 0 to 4 do
               begin
                 C := ReadChar;
-                Temp64 := Temp64 + (ResolveChar(C) * Coefficients_Base85[j]);
+                Temp64 := Temp64 + (Int64(ResolveChar(C)) * Coefficients_Base85[j]);
               end;
           end;
 
@@ -3226,8 +3575,10 @@ For i := 1 to Ceil(Size / 4) do
     If TMemSize(i * 4) > Size then
       begin
         If fReversed then
+        {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
           Move(Pointer(PtrUInt(@Temp) + PtrUInt(4 - (Size mod 4)))^,
                Pointer(PtrUInt(DataPtr) + PtrUInt(4 - (Size mod 4)))^,Size mod 4)
+        {$IFDEF FPCDWM}{$POP}{$ENDIF}
         else
           Move(Temp,DataPtr^,Size mod 4);
       end
@@ -3258,7 +3609,7 @@ end;
 
 class Function TBase85Decoder.EncodingFeatures: TBTEEncodingFeatures;
 begin
-Result := [efCompression,efTrim,efReversible,efSlowOutputSize];
+Result := [efReversible,efCompression,efTrim,efSlowOutputSize];
 end;
 
 //------------------------------------------------------------------------------
@@ -3477,6 +3828,71 @@ var
   Decoder:  TBase2Decoder;
 begin
 Decoder := TBase2Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Decoder.Reversed := Reversed;
+  Result := Decoder.DecodeIntoBuffer(Buffer,Size);
+finally
+  Decoder.Free;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Procedural interface - Base4 encoding
+-------------------------------------------------------------------------------}
+
+Function EncodedLength_Base4(const Buffer; Size: TMemSize; Header: Boolean = False): TStrSize;
+var
+  Encoder:  TBase4Encoder;
+begin
+Encoder := TBase4Encoder.Create;
+try
+  Encoder.Header := Header;
+  Result := Encoder.EncodedLengthFromBuffer(Buffer,Size);
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Encode_Base4(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False): String;
+var
+  Encoder:  TBase4Encoder;
+begin
+Encoder := TBase4Encoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Reversed := Reversed;
+  Encoder.EncodeFromBuffer(Buffer,Size);
+  Result := Encoder.EncodedString;
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecodedSize_Base4(const EncodedString: String): TMemSize;
+var
+  Decoder:  TBase4Decoder;
+begin
+Decoder := TBase4Decoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Result := Decoder.DecodedSize;
+finally
+  Decoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Decode_Base4(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+var
+  Decoder:  TBase4Decoder;
+begin
+Decoder := TBase4Decoder.Create;
 try
   Decoder.EncodedString := EncodedString;
   Decoder.Reversed := Reversed;
@@ -4033,6 +4449,7 @@ Function EncodedLength(Encoding: TBTEEncoding; const Buffer; Size: TMemSize; Hea
 begin
 case Encoding of
   encBase2:     Result := EncodedLength_Base2(Buffer,Size,Header);
+  encBase4:     Result := EncodedLength_Base4(Buffer,Size,Header);
   encBase8:     Result := EncodedLength_Base8(Buffer,Size,Header,Padding);
   encBase10:    Result := EncodedLength_Base10(Buffer,Size,Header);
   encBase16:    Result := EncodedLength_Base16(Buffer,Size,Header);
@@ -4053,6 +4470,7 @@ Function Encode(Encoding: TBTEEncoding; const Buffer; Size: TMemSize; Header: Bo
 begin
 case Encoding of
   encBase2:     Result := Encode_Base2(Buffer,Size,Header,Reversed);
+  encBase4:     Result := Encode_Base4(Buffer,Size,Header,Reversed);
   encBase8:     Result := Encode_Base8(Buffer,Size,Header,Reversed,Padding);
   encBase10:    Result := Encode_Base10(Buffer,Size,Header,Reversed);
   encBase16:    Result := Encode_Base16(Buffer,Size,Header,Reversed);
@@ -4072,6 +4490,7 @@ Function DecodedSize(Encoding: TBTEEncoding; const EncodedString: String): TMemS
 begin
 case Encoding of
   encBase2:     Result := DecodedSize_Base2(EncodedString);
+  encBase4:     Result := DecodedSize_Base4(EncodedString);
   encBase8:     Result := DecodedSize_Base8(EncodedString);
   encBase10:    Result := DecodedSize_Base10(EncodedString);
   encBase16:    Result := DecodedSize_Base16(EncodedString);
@@ -4091,6 +4510,7 @@ Function Decode(Encoding: TBTEEncoding; const EncodedString: String; out Buffer;
 begin
 case Encoding of
   encBase2:     Result := Decode_Base2(EncodedString,Buffer,Size,Reversed);
+  encBase4:     Result := Decode_Base4(EncodedString,Buffer,Size,Reversed);
   encBase8:     Result := Decode_Base8(EncodedString,Buffer,Size,Reversed);
   encBase10:    Result := Decode_Base10(EncodedString,Buffer,Size,Reversed);
   encBase16:    Result := Decode_Base16(EncodedString,Buffer,Size,Reversed);
@@ -4102,6 +4522,33 @@ case Encoding of
 else
   raise EBTEInvalidValue.CreateFmt('Decode: Unknown encoding (%d).',[Ord(Encoding)]);
 end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function HeaderEncoding(const EncodedString: String): TBTEEncoding;
+begin
+Result := TBTETranscoder.HeaderEncoding(EncodedString);
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecodedSize(const EncodedString: String): TMemSize;
+begin
+If TBTETranscoder.HeaderPresent(EncodedString) then
+  Result := DecodedSize(TBTETranscoder.HeaderEncoding(EncodedString),EncodedString)
+else
+  raise EBTEInvalidValue.Create('DecodedSize: Encoded string does not contain a valid header.');
+end;
+
+//------------------------------------------------------------------------------
+
+Function Decode(const EncodedString: String; out Buffer; Size: TMemSize): TMemSize;
+begin
+If TBTETranscoder.HeaderPresent(EncodedString) then
+  Result := Decode(TBTETranscoder.HeaderEncoding(EncodedString),EncodedString,Buffer,Size)
+else
+  raise EBTEInvalidValue.Create('Decode: Encoded string does not contain a valid header.');
 end;
 
 end.
