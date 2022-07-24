@@ -7,22 +7,38 @@
 -------------------------------------------------------------------------------}
 {===============================================================================
 
-  Binary to text encodings
+  Binary data to text encoding and decoding
 
-  ©František Milt 2018-05-12
+    - Base16, Base32 and Base64 encodings should be compliant with RFC 4648
+    - Base85 encoding is using Z85 alphabet with undescore ("_", #95) as an
+      all-zero compression character
+    - Base16 corresponds to usual hexadecimal encoding
+    - Base10 only encodes to three-digit decimal number representing given byte
 
-  Version 1.1.5
+  Version 2.0 (2022-07-23)
 
-  Notes:
-    - Do not call EncodedLength function with Base85 or Ascii85 encoding.
-    - Hexadecimal encoding is always forward (ie. not reversed) when executed by
-      a universal function, irrespective of selected setting.
-    - Base16, Base32 nad Base64 encodings should be compliant with RFC 4648.
-    - Base85 encoding is by-default using Z85 alphabet with undescore ("_", #95)
-      as an all-zero compression letter.
+  Last change 2022-07-23
+
+  ©2015-2022 František Milt
+
+  Contacts:
+    František Milt: frantisek.milt@gmail.com
+
+  Support:
+    If you find this code useful, please consider supporting its author(s) by
+    making a small donation using the following link(s):
+
+      https://www.paypal.me/FMilt
+
+  Changelog:
+    For detailed changelog and history please refer to this git repository:
+
+      github.com/TheLazyTomcat/Lib.BinTextEnc
 
   Dependencies:
-    AuxTypes - github.com/ncs-sniper/Lib.AuxTypes
+    AuxTypes   - github.com/TheLazyTomcat/Lib.AuxTypes
+    AuxClasses - github.com/TheLazyTomcat/Lib.AuxClasses
+    StrRect    - github.com/TheLazyTomcat/Lib.StrRect
 
 ===============================================================================}
 unit BinTextEnc;
@@ -41,6 +57,9 @@ uses
   SysUtils, Classes,
   AuxTypes, AuxClasses;
 
+{===============================================================================
+    Library-specific exceptions
+===============================================================================}
 type
   EBTEException = class(Exception);
 
@@ -62,17 +81,19 @@ type
                   encBase32,encBase32Hex,encBase64,encBase85,encASCII85);
 
 {
-  efReversible        encoding supports reversed data reading
-  efPadding           encoding supports padding
-  efCompression       encoding supports compression
-  efTrim              encoding supports trimming
-  efOutputSize        it is possible to obtain length of encoded string or size
-                      of decoded data
-  efSlowOutputSize    same as efOutputSize, bot the data/string must be scanned
-                      to obtain the value, and is therefore slow(er)
+  efReversible            encoding supports reversed data reading
+  efPadding               encoding supports padding
+  efCompression           encoding supports compression
+  efTrim                  encoding supports trimming
+  efOutputSize            it is possible to obtain length of encoded string or
+                          size of decoded data
+  efSlowOutputSize        same as efOutputSize, bot the data/string must be
+                          scanned to obtain the size, this can be slow
+  efInpreciseOutputSize   reported encoded length or decoded size can be
+                          inprecise (it will never be smaller)
 }
   TBTEEncodingFeature = (efReversible,efPadding,efCompression,efTrim,
-                         efOutputSize,efSlowOutputSize);
+                         efOutputSize,efSlowOutputSize,efInpreciseOutputSize);
 
   TBTEEncodingFeatures = set of TBTEEncodingFeature;
 
@@ -121,6 +142,9 @@ type
     procedure Finalize; virtual;
     // header methods
     class Function HeaderNumberExtract(const EncodedString: String; out HeaderNumber: UInt16): Boolean; virtual;
+    // auxiliary
+    Function ResolveDataPointer(Ptr: Pointer; Size: TMemSize; RevOffset: UInt32 = 1): Pointer; virtual;
+    procedure AdvanceDataPointer(var Ptr: Pointer; Delta: TMemSize = 1); virtual;
   public
   {
     DataLimit returns maximum number of bytes that can be processed by a
@@ -330,6 +354,8 @@ type
     property EncodingTable: TBTEEncodingTable read GetEncodingTable write SetEncodingTable;
   end;
 
+  TBTEEncoderClass = class of TBTEEncoder;
+
 {===============================================================================
 --------------------------------------------------------------------------------
                                   TBTEDecoder
@@ -353,7 +379,7 @@ type
   public
     procedure ConstructDecodingTable(const EncodingTable: TBTEEncodingTable); virtual;
     // resulting data size
-    Function DecodedSize: TMemSize; virtual; abstract;  // sets properties Padding and Compressed
+    Function DecodedSize: TMemSize; virtual; abstract;  // sets properties Padding, Compression and Trim
     //processing
     Function DecodeIntoBuffer(out Buffer; Size: TMemSize): TMemSize; virtual;
     Function DecodeIntoMemory(Mem: Pointer; Size: TMemSize): TMemSize; overload; virtual;
@@ -362,6 +388,8 @@ type
     Function DecodeIntoFile(const FileName: String): TMemSize; virtual;
     property DecodingTable: TBTEDecodingTable read fDecodingTable write fDecodingTable;
   end;
+
+  TBTEDecoderClass = class of TBTEDecoder;
 
 {===============================================================================
 --------------------------------------------------------------------------------
@@ -881,6 +909,11 @@ Function HeaderEncoding(const EncodedString: String): TBTEEncoding;
 Function DecodedSize(const EncodedString: String): TMemSize; overload;
 Function Decode(const EncodedString: String; out Buffer; Size: TMemSize): TMemSize; overload;
 
+//------------------------------------------------------------------------------
+
+Function EncoderFromEncoding(Encoding: TBTEEncoding): TBTEEncoderClass;
+Function DecoderFromEncoding(Encoding: TBTEEncoding): TBTEDecoderClass;
+
 implementation
 
 uses
@@ -922,30 +955,6 @@ If Ord(C) > 255 then
 else
 {$IFEND}
   Result := AnsiChar(C) in S;
-end;
-
-//------------------------------------------------------------------------------
-
-Function ResolveDataPointer(Ptr: Pointer; Size: TMemSize; Reversed: Boolean; RevOffset: UInt32 = 1): Pointer;
-begin
-{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-If Reversed then
-  Result := Pointer(PtrUInt(Ptr) + (PtrUInt(Size) - PtrUInt(RevOffset)))
-else
-  Result := Ptr;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
-end;
-
-//------------------------------------------------------------------------------
-
-procedure AdvanceDataPointer(var Ptr: Pointer; Reversed: Boolean; Delta: TMemSize = 1);
-begin
-{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-If Reversed then
-  Ptr := Pointer(PtrUInt(Ptr) - Delta)
-else
-  Ptr := Pointer(PtrUInt(Ptr) + Delta);
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
 
 //------------------------------------------------------------------------------
@@ -1154,6 +1163,30 @@ If HeaderPresent(EncodedString) then
 else Result := False;
 end;
 
+//------------------------------------------------------------------------------
+
+Function TBTETranscoder.ResolveDataPointer(Ptr: Pointer; Size: TMemSize; RevOffset: UInt32 = 1): Pointer;
+begin
+{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
+If fReversed then
+  Result := Pointer(PtrUInt(Ptr) + (PtrUInt(Size) - PtrUInt(RevOffset)))
+else
+  Result := Ptr;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TBTETranscoder.AdvanceDataPointer(var Ptr: Pointer; Delta: TMemSize = 1);
+begin
+{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
+If fReversed then
+  Ptr := Pointer(PtrUInt(Ptr) - Delta)
+else
+  Ptr := Pointer(PtrUInt(Ptr) + Delta);
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
+end;
+
 {-------------------------------------------------------------------------------
     TBTETranscoder - public methods
 -------------------------------------------------------------------------------}
@@ -1250,13 +1283,13 @@ var
 begin
 {
   Check length of the table, that all chars have ordinal values lower or equal
-  to 127 and also that there are no repeats.
+  to 127 and are not a tilde, and also that there are no repeats.
 }
 Result := False;
 If Length(EncodingTable) = EncodingTableLength then
   begin
     For i := Low(EncodingTable) to High(EncodingTable) do
-      If Ord(EncodingTable[i]) <= 127 then
+      If (Ord(EncodingTable[i]) <= 127) and (EncodingTable[i] <> '~') then
         begin
           For j := Succ(i) to High(EncodingTable) do
             If EncodingTable[i] = EncodingTable[j] then
@@ -1770,7 +1803,7 @@ var
   i,j:      Integer;
   Temp:     Byte;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 For i := 1 to Size do
   begin
     Temp := PByte(DataPtr)^;
@@ -1778,7 +1811,7 @@ For i := 1 to Size do
       WriteChar(fEncodingTable[(Temp shr j) and 1]);
     If fBreakProcessing then
       Break{For i};
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 end;
 
@@ -1865,7 +1898,7 @@ var
   i,j:      Integer;
   Temp:     Byte;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 For i := 1 to Size do
   begin
     Temp := 0;
@@ -1874,7 +1907,7 @@ For i := 1 to Size do
     If fBreakProcessing then
       Break{For i};
     PByte(DataPtr)^ := Temp;
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 end;
 
@@ -1947,7 +1980,7 @@ var
   i,j:      Integer;
   Temp:     Byte;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 For i := 1 to Size do
   begin
     Temp := PByte(DataPtr)^;
@@ -1955,7 +1988,7 @@ For i := 1 to Size do
       WriteChar(fEncodingTable[(Temp shr (j * 2)) and 3]);
     If fBreakProcessing then
       Break{For i};
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 end;
 
@@ -2041,7 +2074,7 @@ var
   i,j:      Integer;
   Temp:     Byte;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 For i := 1 to Size do
   begin
     Temp := 0;
@@ -2050,7 +2083,7 @@ For i := 1 to Size do
     If fBreakProcessing then
       Break{For i};
     PByte(DataPtr)^ := Temp;
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 end;
 
@@ -2128,7 +2161,7 @@ var
   Remainder:      Byte;
   RemainderBits:  Integer;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 Remainder := 0;
 RemainderBits := 0;
 For i := 1 to Size do
@@ -2160,7 +2193,7 @@ For i := 1 to Size do
     end;
     If fBreakProcessing then
       Break{For i};
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 If not fBreakProcessing then
   begin
@@ -2266,7 +2299,7 @@ var
   Remainder:      Byte;
   RemainderBits:  Integer;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 Remainder := 0;
 RemainderBits := 0;
 For i := 1 to Size do
@@ -2300,7 +2333,7 @@ For i := 1 to Size do
     If fBreakProcessing then
       Break{For i};
     PByte(DataPtr)^ := Temp;
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 end;
 
@@ -2379,7 +2412,7 @@ var
   i,j:      Integer;
   Temp:     Byte;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 For i := 1 to Size do
   begin
     Temp := PByte(DataPtr)^;
@@ -2390,7 +2423,7 @@ For i := 1 to Size do
       end;
     If fBreakProcessing then
       Break{For i};
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 end;
 
@@ -2477,7 +2510,7 @@ var
   i,j:      Integer;
   Temp:     Byte;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 For i := 1 to Size do
   begin
     Temp := 0;
@@ -2486,7 +2519,7 @@ For i := 1 to Size do
     If fBreakProcessing then
       Break{For i};
     PByte(DataPtr)^ := Temp;
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 end;
 
@@ -2560,7 +2593,7 @@ var
   i:        Integer;
   Temp:     Byte;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 For i := 1 to Size do
   begin
     Temp := PByte(DataPtr)^;
@@ -2568,7 +2601,7 @@ For i := 1 to Size do
     WriteChar(fEncodingTable[Temp and $F]);
     If fBreakProcessing then
       Break{For i};
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 end;
 
@@ -2655,7 +2688,7 @@ var
   i:        Integer;
   Temp:     Byte;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 For i := 1 to Size do
   begin
     Temp := ResolveChar(ReadChar) shl 4;
@@ -2663,7 +2696,7 @@ For i := 1 to Size do
     If fBreakProcessing then
       Break{For i};
     PByte(DataPtr)^ := Temp;
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 end;
 
@@ -2743,7 +2776,7 @@ var
   Remainder:      Byte;
   RemainderBits:  Integer;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 Remainder := 0;
 RemainderBits := 0;
 For i := 1 to Size do
@@ -2783,7 +2816,7 @@ For i := 1 to Size do
     end;
     If fBreakProcessing then
       Break{For i};
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 If not fBreakProcessing then
   begin
@@ -2889,7 +2922,7 @@ var
   Remainder:      Byte;
   RemainderBits:  Integer;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 Remainder := 0;
 RemainderBits := 0;
 For i := 1 to Size do
@@ -2934,7 +2967,7 @@ For i := 1 to Size do
     If fBreakProcessing then
       Break{For i};
     PByte(DataPtr)^ := Temp;
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 end;
 
@@ -3108,7 +3141,7 @@ var
   Remainder:      Byte;
   RemainderBits:  Integer;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 Remainder := 0;
 RemainderBits := 0;
 For i := 1 to Size do
@@ -3136,7 +3169,7 @@ For i := 1 to Size do
     end;
     If fBreakProcessing then
       Break{For i};
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 If not fBreakProcessing then
   begin
@@ -3240,7 +3273,7 @@ var
   Remainder:      Byte;
   RemainderBits:  Integer;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed);
+DataPtr := ResolveDataPointer(@Buffer,Size);
 Remainder := 0;
 RemainderBits := 0;
 For i := 1 to Size do
@@ -3271,7 +3304,7 @@ For i := 1 to Size do
     If fBreakProcessing then
       Break{For i};
     PByte(DataPtr)^ := Temp;
-    AdvanceDataPointer(DataPtr,fReversed);
+    AdvanceDataPointer(DataPtr);
   end;
 end;
 
@@ -3359,7 +3392,7 @@ var
   i,j:      Integer;
   Temp:     UInt32;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed,4);
+DataPtr := ResolveDataPointer(@Buffer,Size,4);
 // trawerse all words, including partial ones
 For i := 1 to Ceil(Size / 4) do
   begin
@@ -3393,7 +3426,7 @@ For i := 1 to Ceil(Size / 4) do
     else WriteChar(fCompressionChar);
     If fBreakProcessing then
       Break{For i};
-    AdvanceDataPointer(DataPtr,fReversed,4);
+    AdvanceDataPointer(DataPtr,4);
   end;
 end;
 
@@ -3457,12 +3490,12 @@ Function TBase85Encoder.EncodedLengthFromBuffer(const Buffer; Size: TMemSize): T
     i:        Integer;
   begin
     Result := 0;
-    DataPtr := ResolveDataPointer(@Buffer,Size,fReversed,4);
+    DataPtr := ResolveDataPointer(@Buffer,Size,4);
     For i := 1 to (Size div 4) do
       begin
         If PUInt32(DataPtr)^ = 0 then
           Inc(Result);
-        AdvanceDataPointer(DataPtr,fReversed,4);
+        AdvanceDataPointer(DataPtr,4);
       end;
   end;
 
@@ -3532,7 +3565,7 @@ var
   Temp:     UInt32;
   Temp64:   Int64;
 begin
-DataPtr := ResolveDataPointer(@Buffer,Size,fReversed,4);
+DataPtr := ResolveDataPointer(@Buffer,Size,4);
 For i := 1 to Ceil(Size / 4) do
   begin
     C := ReadChar;
@@ -3585,7 +3618,7 @@ For i := 1 to Ceil(Size / 4) do
     else PUInt32(DataPtr)^ := Temp;
     If fBreakProcessing then
       Break{For i};    
-    AdvanceDataPointer(DataPtr,fReversed,4);
+    AdvanceDataPointer(DataPtr,4);
   end;
 end;
 
@@ -3609,7 +3642,7 @@ end;
 
 class Function TBase85Decoder.EncodingFeatures: TBTEEncodingFeatures;
 begin
-Result := [efReversible,efCompression,efTrim,efSlowOutputSize];
+Result := [efReversible,efCompression,efTrim,efSlowOutputSize,efInpreciseOutputSize];
 end;
 
 //------------------------------------------------------------------------------
@@ -4515,7 +4548,7 @@ case Encoding of
   encBase10:    Result := Decode_Base10(EncodedString,Buffer,Size,Reversed);
   encBase16:    Result := Decode_Base16(EncodedString,Buffer,Size,Reversed);
   encBase32:    Result := Decode_Base32(EncodedString,Buffer,Size,Reversed);
-  encBase32Hex: Result := Decode_Base32(EncodedString,Buffer,Size,Reversed);
+  encBase32Hex: Result := Decode_Base32Hex(EncodedString,Buffer,Size,Reversed);
   encBase64:    Result := Decode_Base64(EncodedString,Buffer,Size,Reversed);
   encBase85:    Result := Decode_Base85(EncodedString,Buffer,Size,Reversed);
   encASCII85:   Result := Decode_ASCII85(EncodedString,Buffer,Size,Reversed);
@@ -4549,6 +4582,46 @@ If TBTETranscoder.HeaderPresent(EncodedString) then
   Result := Decode(TBTETranscoder.HeaderEncoding(EncodedString),EncodedString,Buffer,Size)
 else
   raise EBTEInvalidValue.Create('Decode: Encoded string does not contain a valid header.');
+end;
+
+//------------------------------------------------------------------------------
+
+Function EncoderFromEncoding(Encoding: TBTEEncoding): TBTEEncoderClass;
+begin
+case Encoding of
+  encBase2:     Result := TBase2Encoder;
+  encBase4:     Result := TBase4Encoder;
+  encBase8:     Result := TBase8Encoder;
+  encBase10:    Result := TBase10Encoder;
+  encBase16:    Result := TBase16Encoder;
+  encBase32:    Result := TBase32Encoder;
+  encBase32Hex: Result := TBase32HexEncoder;
+  encBase64:    Result := TBase64Encoder;
+  encBase85:    Result := TBase85Encoder;
+  encASCII85:   Result := TASCII85Encoder;
+else
+  raise EBTEInvalidValue.CreateFmt('EncoderFromEncoding: Unknown encoding (%d).',[Ord(Encoding)]);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecoderFromEncoding(Encoding: TBTEEncoding): TBTEDecoderClass;
+begin
+case Encoding of
+  encBase2:     Result := TBase2Decoder;
+  encBase4:     Result := TBase4Decoder;
+  encBase8:     Result := TBase8Decoder;
+  encBase10:    Result := TBase10Decoder;
+  encBase16:    Result := TBase16Decoder;
+  encBase32:    Result := TBase32Decoder;
+  encBase32Hex: Result := TBase32HexDecoder;
+  encBase64:    Result := TBase64Decoder;
+  encBase85:    Result := TBase85Decoder;
+  encASCII85:   Result := TASCII85Decoder;
+else
+  raise EBTEInvalidValue.CreateFmt('DecoderFromEncoding: Unknown encoding (%d).',[Ord(Encoding)]);
+end;
 end;
 
 end.
