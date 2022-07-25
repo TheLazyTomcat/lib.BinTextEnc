@@ -14,10 +14,14 @@
       all-zero compression character
     - Base16 corresponds to usual hexadecimal encoding
     - Base10 only encodes to three-digit decimal number representing given byte
+    - when using Base85 and ASCII85, the decoded data migh end or start (in
+      case of reversed data reading) with zeroes that were not part of the
+      original data (a result of these encodings being block-based, these
+      zeroes are block padding)
 
-  Version 2.0 (2022-07-23)
+  Version 2.0 (2022-07-25)
 
-  Last change 2022-07-23
+  Last change 2022-07-25
 
   ©2015-2022 František Milt
 
@@ -50,6 +54,10 @@ unit BinTextEnc;
   {$MACRO ON}
 {$ENDIF}
 {$H+}
+
+{$IFOPT Q+}
+  {$DEFINE OverflowChecks}
+{$ENDIF}
 
 interface
 
@@ -90,7 +98,8 @@ type
   efSlowOutputSize        same as efOutputSize, bot the data/string must be
                           scanned to obtain the size, this can be slow
   efInpreciseOutputSize   reported encoded length or decoded size can be
-                          inprecise (it will never be smaller)
+                          inprecise (note that it will never be smaller), it is
+                          usually rounded to some boundary (eg. block)
 }
   TBTEEncodingFeature = (efReversible,efPadding,efCompression,efTrim,
                          efOutputSize,efSlowOutputSize,efInpreciseOutputSize);
@@ -1165,6 +1174,8 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF OverflowChecks}{$Q-}{$ENDIF}
+
 Function TBTETranscoder.ResolveDataPointer(Ptr: Pointer; Size: TMemSize; RevOffset: UInt32 = 1): Pointer;
 begin
 {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
@@ -1186,6 +1197,8 @@ else
   Ptr := Pointer(PtrUInt(Ptr) + Delta);
 {$IFDEF FPCDWM}{$POP}{$ENDIF}
 end;
+
+{$IFDEF OverflowChecks}{$Q+}{$ENDIF}
 
 {-------------------------------------------------------------------------------
     TBTETranscoder - public methods
@@ -3593,7 +3606,6 @@ For i := 1 to Ceil(Size / 4) do
                 Temp64 := Temp64 + (Int64(ResolveChar(C)) * Coefficients_Base85[j]);
               end;
           end;
-
         // check validity of the encoded word
         If Temp64 <= High(UInt32) then
           Temp := UInt32(Temp64)
