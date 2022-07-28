@@ -21,7 +21,7 @@
 
   Version 2.0 (2022-07-25)
 
-  Last change 2022-07-25
+  Last change 2022-07-28
 
   ©2015-2022 František Milt
 
@@ -1400,7 +1400,7 @@ procedure TBTEEncoder.WriteHeader;
       encBase85:      Result := BTE_HEADER_ENCODING_BASE85;
       encAscii85:     Result := BTE_HEADER_ENCODING_BASE85A;
     else
-      raise EBTEInvalidValue.CreateFmt('TBTEEncoder.OutputHeader.CalculateHeaderNumber: Invalid encoding (%d).',[Ord(Encoding)]);
+      raise EBTEInvalidValue.CreateFmt('TBTEEncoder.WriteHeader.CalculateHeaderNumber: Invalid encoding (%d).',[Ord(Encoding)]);
     end;
     // flags
     If fReversed and (efReversible in EncodingFeatures) then
