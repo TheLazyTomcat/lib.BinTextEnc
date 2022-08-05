@@ -9,7 +9,8 @@
 
   Binary data to text encoding and decoding
 
-    - Base16, Base32 and Base64 encodings should be compliant with RFC 4648
+    - Base16, Base32(Hex) and Base64(URL) encodings should be compliant with
+      RFC 4648
     - Base85 encoding is using Z85 alphabet with undescore ("_", #95) as an
       all-zero compression character
     - Base16 corresponds to usual hexadecimal encoding
@@ -19,9 +20,9 @@
       original data (a result of these encodings being block-based, these
       zeroes are block padding)
 
-  Version 2.0 (2022-07-25)
+  Version 2.1 (2022-08-05)
 
-  Last change 2022-07-28
+  Last change 2022-08-05
 
   ©2015-2022 František Milt
 
@@ -86,7 +87,8 @@ type
 ===============================================================================}
 type
   TBTEEncoding = (encUnknown,encBase2,encBase4,encBase8,encBase10,encBase16,
-                  encBase32,encBase32Hex,encBase64,encBase85,encASCII85);
+                  encBase32,encBase32Hex,encBase64,encBase64URL,encBase85,
+                  encASCII85);
 
 {
   efReversible            encoding supports reversed data reading
@@ -155,6 +157,11 @@ type
     Function ResolveDataPointer(Ptr: Pointer; Size: TMemSize; RevOffset: UInt32 = 1): Pointer; virtual;
     procedure AdvanceDataPointer(var Ptr: Pointer; Delta: TMemSize = 1); virtual;
   public
+  {
+    Use following to build encoding table type from other types.
+  }
+    class Function CreateEncodingTable(const Source: array of Char): TBTEEncodingTable; overload; virtual;
+    class Function CreateEncodingTable(const Source: String): TBTEEncodingTable; overload; virtual;
   {
     DataLimit returns maximum number of bytes that can be processed by a
     particular encoder.
@@ -342,7 +349,7 @@ type
     fEncodingTable: TBTEEncodingTable;
     Function GetEncodingTable: TBTEEncodingTable; virtual;
     procedure SetEncodingTable(const Value: TBTEEncodingTable); virtual;
-    procedure AssignEncodingTable(const EncodingTable: array of Char); virtual;
+    procedure AssignEncodingTable(const EncodingTable: TBTEEncodingTable); virtual;
     // processing
     procedure WriteHeader; virtual;
     procedure WriteChar(C: Char); virtual;
@@ -730,6 +737,40 @@ type
 
 {===============================================================================
 --------------------------------------------------------------------------------
+                                TBase64URLEncoder
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TBase64URLEncoder - class declaration
+===============================================================================}
+type
+  TBase64URLEncoder = class(TBase64Encoder)
+  protected
+    procedure InitializeTable; override;
+  public
+    class Function Encoding: TBTEEncoding; override;
+    class Function EncodingTableLength: Integer; override;
+  end;
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                TBase64URLDecoder
+--------------------------------------------------------------------------------
+===============================================================================}
+{===============================================================================
+    TBase64URLDecoder - class declaration
+===============================================================================}
+type
+  TBase64URLDecoder = class(TBase64Decoder)
+  protected
+    procedure InitializeTable; override;
+  public
+    class Function Encoding: TBTEEncoding; override;
+    class Function EncodingTableLength: Integer; override;
+  end;
+
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TBase85Encoder
 --------------------------------------------------------------------------------
 ===============================================================================}
@@ -880,6 +921,14 @@ Function Decode_Base64(const EncodedString: String; out Buffer; Size: TMemSize; 
 
 //------------------------------------------------------------------------------
 
+Function EncodedLength_Base64URL(const Buffer; Size: TMemSize; Header: Boolean = False; Padding: Boolean = False): TStrSize;
+Function Encode_Base64URL(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Padding: Boolean = False): String;
+
+Function DecodedSize_Base64URL(const EncodedString: String): TMemSize;
+Function Decode_Base64URL(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+
+//------------------------------------------------------------------------------
+
 Function EncodedLength_Base85(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): TStrSize;
 Function Encode_Base85(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Compression: Boolean = False; Trim: Boolean = False): String;
 
@@ -951,6 +1000,9 @@ const
   BTE_HEADER_ENCODING_BASE64  = 8;
   BTE_HEADER_ENCODING_BASE85  = 9;
   BTE_HEADER_ENCODING_BASE85A = 10;
+
+  // newly added...
+  BTE_HEADER_ENCODING_BASE64U = 11;
 
   BTE_HEADER_FLAG_REVERSED = $0100;
 
@@ -1204,6 +1256,28 @@ end;
     TBTETranscoder - public methods
 -------------------------------------------------------------------------------}
 
+class Function TBTETranscoder.CreateEncodingTable(const Source: array of Char): TBTEEncodingTable;
+var
+  i:  Integer;
+begin
+SetLength(Result,Length(Source));
+For i := Low(Result) to High(Result) do
+  Result[i] := Source[i];
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+class Function TBTETranscoder.CreateEncodingTable(const Source: String): TBTEEncodingTable;
+var
+  i:  Integer;
+begin
+SetLength(Result,Length(Source));
+For i := Low(Result) to High(Result) do
+  Result[i] := Source[i + 1];
+end;
+
+//------------------------------------------------------------------------------
+
 class Function TBTETranscoder.CharLimit: TStrSize;
 begin
 Result := 512 * 1024 * 1024;  // about 1GiB for unicode/wide string
@@ -1268,6 +1342,7 @@ If HeaderNumberExtract(EncodedString,HeaderNumber) then
     BTE_HEADER_ENCODING_BASE32:   Result := encBase32;
     BTE_HEADER_ENCODING_BASE32H:  Result := encBase32Hex;
     BTE_HEADER_ENCODING_BASE64:   Result := encBase64;
+    BTE_HEADER_ENCODING_BASE64U:  Result := encBase64URL;
     BTE_HEADER_ENCODING_BASE85:   Result := encBase85;
     BTE_HEADER_ENCODING_BASE85A:  Result := encAscii85;
   else
@@ -1372,7 +1447,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TBTEEncoder.AssignEncodingTable(const EncodingTable: array of Char);
+procedure TBTEEncoder.AssignEncodingTable(const EncodingTable: TBTEEncodingTable);
 var
   i:  Integer;
 begin
@@ -1397,6 +1472,7 @@ procedure TBTEEncoder.WriteHeader;
       encBase32:      Result := BTE_HEADER_ENCODING_BASE32;
       encBase32Hex:   Result := BTE_HEADER_ENCODING_BASE32H;
       encBase64:      Result := BTE_HEADER_ENCODING_BASE64;
+      encBase64URL:   Result := BTE_HEADER_ENCODING_BASE64U;
       encBase85:      Result := BTE_HEADER_ENCODING_BASE85;
       encAscii85:     Result := BTE_HEADER_ENCODING_BASE85A;
     else
@@ -1805,7 +1881,7 @@ const
 
 procedure TBase2Encoder.InitializeTable;
 begin
-AssignEncodingTable(EncodingTable_Base2);
+AssignEncodingTable(CreateEncodingTable(EncodingTable_Base2));
 end;
 
 //------------------------------------------------------------------------------
@@ -1982,7 +2058,7 @@ const
 
 procedure TBase4Encoder.InitializeTable;
 begin
-AssignEncodingTable(EncodingTable_Base4);
+AssignEncodingTable(CreateEncodingTable(EncodingTable_Base4));
 end;
 
 //------------------------------------------------------------------------------
@@ -2160,7 +2236,7 @@ const
 
 procedure TBase8Encoder.InitializeTable;
 begin
-AssignEncodingTable(EncodingTable_Base8);
+AssignEncodingTable(CreateEncodingTable(EncodingTable_Base8));
 fPaddingChar := PaddingChar_Base8;
 end;
 
@@ -2351,7 +2427,7 @@ For i := 1 to Size do
 end;
 
 {-------------------------------------------------------------------------------
-    TBase64Decoder - public methods
+    TBase8Decoder - public methods
 -------------------------------------------------------------------------------}
 
 class Function TBase8Decoder.DataLimit: TMemSize;
@@ -2414,7 +2490,7 @@ const
 
 procedure TBase10Encoder.InitializeTable;
 begin
-AssignEncodingTable(EncodingTable_Base10);
+AssignEncodingTable(CreateEncodingTable(EncodingTable_Base10));
 end;
 
 //------------------------------------------------------------------------------
@@ -2595,7 +2671,7 @@ const
 
 procedure TBase16Encoder.InitializeTable;
 begin
-AssignEncodingTable(EncodingTable_Base16);
+AssignEncodingTable(CreateEncodingTable(EncodingTable_Base16));
 end;
 
 //------------------------------------------------------------------------------
@@ -2775,7 +2851,7 @@ const
 
 procedure TBase32Encoder.InitializeTable;
 begin
-AssignEncodingTable(EncodingTable_Base32);
+AssignEncodingTable(CreateEncodingTable(EncodingTable_Base32));
 fPaddingChar := PaddingChar_Base32;
 end;
 
@@ -3050,7 +3126,7 @@ const
 
 procedure TBase32HexEncoder.InitializeTable;
 begin
-AssignEncodingTable(EncodingTable_Base32Hex);
+AssignEncodingTable(CreateEncodingTable(EncodingTable_Base32Hex));
 fPaddingChar := PaddingChar_Base32Hex;
 end;
 
@@ -3140,7 +3216,7 @@ const
 
 procedure TBase64Encoder.InitializeTable;
 begin
-AssignEncodingTable(EncodingTable_Base64);
+AssignEncodingTable(CreateEncodingTable(EncodingTable_Base64));
 fPaddingChar := PaddingChar_Base64;
 end;
 
@@ -3368,6 +3444,96 @@ end;
 
 {===============================================================================
 --------------------------------------------------------------------------------
+                                TBase64URLEncoder
+--------------------------------------------------------------------------------
+===============================================================================}
+const
+  EncodingTable_Base64URL: array[0..63] of Char =
+    ('A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P',
+     'Q','R','S','T','U','V','W','X','Y','Z','a','b','c','d','e','f',
+     'g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v',
+     'w','x','y','z','0','1','2','3','4','5','6','7','8','9','-','_');
+
+  PaddingChar_Base64URL: Char = '=';
+
+{===============================================================================
+    TBase64URLEncoder - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TBase64URLEncoder - protected methods
+-------------------------------------------------------------------------------}
+
+procedure TBase64URLEncoder.InitializeTable;
+begin
+AssignEncodingTable(CreateEncodingTable(EncodingTable_Base64URL));
+fPaddingChar := PaddingChar_Base64URL;
+end;
+
+{-------------------------------------------------------------------------------
+    TBase64URLEncoder - public methods
+-------------------------------------------------------------------------------}
+
+class Function TBase64URLEncoder.Encoding: TBTEEncoding;
+begin
+Result := encBase64URL;
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TBase64URLEncoder.EncodingTableLength: Integer;
+begin
+Result := Length(EncodingTable_Base64URL);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
+                                TBase64URLDecoder
+--------------------------------------------------------------------------------
+===============================================================================}
+const
+  DecodingTable_Base64URL: TBTEDecodingTable =
+    ($FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF,
+     $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF,
+     $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $FF, $3E, $FF, $FF,
+     $34, $35, $36, $37, $38, $39, $3A, $3B, $3C, $3D, $FF, $FF, $FF, $FF, $FF, $FF,
+     $FF, $00, $01, $02, $03, $04, $05, $06, $07, $08, $09, $0A, $0B, $0C, $0D, $0E,
+     $0F, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $FF, $FF, $FF, $FF, $3F,
+     $FF, $1A, $1B, $1C, $1D, $1E, $1F, $20, $21, $22, $23, $24, $25, $26, $27, $28,
+     $29, $2A, $2B, $2C, $2D, $2E, $2F, $30, $31, $32, $33, $FF, $FF, $FF, $FF, $FF);
+
+{===============================================================================
+    TBase64URLDecoder - class declaration
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TBase64URLDecoder - protected methods
+-------------------------------------------------------------------------------}
+
+procedure TBase64URLDecoder.InitializeTable;
+begin
+fDecodingTable := DecodingTable_Base64URL;
+fPaddingChar := PaddingChar_Base64URL;
+end;
+
+{-------------------------------------------------------------------------------
+    TBase64URLEncoder - public methods
+-------------------------------------------------------------------------------}
+
+class Function TBase64URLDecoder.Encoding: TBTEEncoding;
+begin
+Result := encBase64URL;
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TBase64URLDecoder.EncodingTableLength: Integer;
+begin
+Result := Length(EncodingTable_Base64URL);
+end;
+
+
+{===============================================================================
+--------------------------------------------------------------------------------
                                  TBase85Encoder
 --------------------------------------------------------------------------------
 ===============================================================================}
@@ -3393,7 +3559,7 @@ const
 
 procedure TBase85Encoder.InitializeTable;
 begin
-AssignEncodingTable(EncodingTable_Base85);
+AssignEncodingTable(CreateEncodingTable(EncodingTable_Base85));
 fCompressionChar := CompressionChar_Base85;
 end;
 
@@ -3742,7 +3908,7 @@ const
 
 procedure TASCII85Encoder.InitializeTable;
 begin
-AssignEncodingTable(EncodingTable_ASCII85);
+AssignEncodingTable(CreateEncodingTable(EncodingTable_ASCII85));
 fCompressionChar := CompressionChar_ASCII85;
 end;
 
@@ -4346,6 +4512,73 @@ end;
 end;
 
 {-------------------------------------------------------------------------------
+    Procedural interface - Base64URL encoding
+-------------------------------------------------------------------------------}
+
+Function EncodedLength_Base64URL(const Buffer; Size: TMemSize; Header: Boolean = False; Padding: Boolean = False): TStrSize;
+var
+  Encoder:  TBase64URLEncoder;
+begin
+Encoder := TBase64URLEncoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Padding := Padding;
+  Result := Encoder.EncodedLengthFromBuffer(Buffer,Size);
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Encode_Base64URL(const Buffer; Size: TMemSize; Header: Boolean = False; Reversed: Boolean = False; Padding: Boolean = False): String;
+var
+  Encoder:  TBase64URLEncoder;
+begin
+Encoder := TBase64URLEncoder.Create;
+try
+  Encoder.Header := Header;
+  Encoder.Reversed := Reversed;
+  Encoder.Padding := Padding;
+  Encoder.EncodeFromBuffer(Buffer,Size);
+  Result := Encoder.EncodedString;
+finally
+  Encoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function DecodedSize_Base64URL(const EncodedString: String): TMemSize;
+var
+  Decoder:  TBase64URLDecoder;
+begin
+Decoder := TBase64URLDecoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Result := Decoder.DecodedSize;
+finally
+  Decoder.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function Decode_Base64URL(const EncodedString: String; out Buffer; Size: TMemSize; Reversed: Boolean = False): TMemSize;
+var
+  Decoder:  TBase64URLDecoder;
+begin
+Decoder := TBase64URLDecoder.Create;
+try
+  Decoder.EncodedString := EncodedString;
+  Decoder.Reversed := Reversed;
+  Result := Decoder.DecodeIntoBuffer(Buffer,Size);
+finally
+  Decoder.Free;
+end;
+end;
+
+{-------------------------------------------------------------------------------
     Procedural interface - Base85 encoding
 -------------------------------------------------------------------------------}
 
@@ -4501,6 +4734,7 @@ case Encoding of
   encBase32:    Result := EncodedLength_Base32(Buffer,Size,Header,Padding);
   encBase32Hex: Result := EncodedLength_Base32Hex(Buffer,Size,Header,Padding);
   encBase64:    Result := EncodedLength_Base64(Buffer,Size,Header,Padding);
+  encBase64URL: Result := EncodedLength_Base64URL(Buffer,Size,Header,Padding);
   encBase85:    Result := EncodedLength_Base85(Buffer,Size,Header,Reversed,Compression,Trim);
   encASCII85:   Result := EncodedLength_ASCII85(Buffer,Size,Header,Reversed,Compression,Trim);
 else
@@ -4522,6 +4756,7 @@ case Encoding of
   encBase32:    Result := Encode_Base32(Buffer,Size,Header,Reversed,Padding);
   encBase32Hex: Result := Encode_Base32Hex(Buffer,Size,Header,Reversed,Padding);
   encBase64:    Result := Encode_Base64(Buffer,Size,Header,Reversed,Padding);
+  encBase64URL: Result := Encode_Base64URL(Buffer,Size,Header,Reversed,Padding);
   encBase85:    Result := Encode_Base85(Buffer,Size,Header,Reversed,Compression,Trim);
   encASCII85:   Result := Encode_ASCII85(Buffer,Size,Header,Reversed,Compression,Trim);
 else
@@ -4542,6 +4777,7 @@ case Encoding of
   encBase32:    Result := DecodedSize_Base32(EncodedString);
   encBase32Hex: Result := DecodedSize_Base32Hex(EncodedString);
   encBase64:    Result := DecodedSize_Base64(EncodedString);
+  encBase64URL: Result := DecodedSize_Base64URL(EncodedString);
   encBase85:    Result := DecodedSize_Base85(EncodedString);
   encASCII85:   Result := DecodedSize_ASCII85(EncodedString);
 else
@@ -4562,6 +4798,7 @@ case Encoding of
   encBase32:    Result := Decode_Base32(EncodedString,Buffer,Size,Reversed);
   encBase32Hex: Result := Decode_Base32Hex(EncodedString,Buffer,Size,Reversed);
   encBase64:    Result := Decode_Base64(EncodedString,Buffer,Size,Reversed);
+  encBase64URL: Result := Decode_Base64URL(EncodedString,Buffer,Size,Reversed);
   encBase85:    Result := Decode_Base85(EncodedString,Buffer,Size,Reversed);
   encASCII85:   Result := Decode_ASCII85(EncodedString,Buffer,Size,Reversed);
 else
@@ -4609,6 +4846,7 @@ case Encoding of
   encBase32:    Result := TBase32Encoder;
   encBase32Hex: Result := TBase32HexEncoder;
   encBase64:    Result := TBase64Encoder;
+  encBase64URL: Result := TBase64URLEncoder;
   encBase85:    Result := TBase85Encoder;
   encASCII85:   Result := TASCII85Encoder;
 else
@@ -4629,6 +4867,7 @@ case Encoding of
   encBase32:    Result := TBase32Decoder;
   encBase32Hex: Result := TBase32HexDecoder;
   encBase64:    Result := TBase64Decoder;
+  encBase64URL: Result := TBase64URLDecoder;
   encBase85:    Result := TBase85Decoder;
   encASCII85:   Result := TASCII85Decoder;
 else
