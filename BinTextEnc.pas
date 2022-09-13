@@ -22,7 +22,7 @@
 
   Version 2.1 (2022-08-05)
 
-  Last change 2022-08-05
+  Last change 2022-09-13
 
   ©2015-2022 František Milt
 
@@ -1160,8 +1160,8 @@ end;
 procedure TBTETranscoder.DoProgress(Progress: Double);
 begin
 If Assigned(fOnProgressEvent) then
-  fOnProgressEvent(Self,Progress);
-If Assigned(fOnProgressCallback) then
+  fOnProgressEvent(Self,Progress)
+else If Assigned(fOnProgressCallback) then
   fOnProgressCallback(Self,Progress);
 end;
 
